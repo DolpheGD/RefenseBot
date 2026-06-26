@@ -19,7 +19,11 @@ class Listeners(commands.Cog):
             return
         
         user_id = str(message.author.id)
-        update_user(user_id)
+        message_id = str(message.id)
+        content = str(message.clean_content)
+        message_time = message.created_at
+
+        update_user(user_id, message_id, content, message_time)
         
 
 

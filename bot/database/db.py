@@ -5,6 +5,6 @@ DB_URL = "sqlite:///cascadebot.db"
 
 engine = create_engine(
     DB_URL,
-    echo=True,
+    echo=False,
     connect_args={"check_same_thread": False}
 )

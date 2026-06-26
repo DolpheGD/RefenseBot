@@ -3,7 +3,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from bot.config import SERVER_ID
-from bot.utils.embedder import classify_with_output
+from bot.utils.embedder import classify_user_with_output, classify_with_output
 
 @app_commands.guilds(discord.Object(id=SERVER_ID))  # remove when you want to make the command global
 class Classify(commands.GroupCog, name="classify"):
@@ -48,7 +48,21 @@ class Classify(commands.GroupCog, name="classify"):
             await ctx.response.send_message("I do not have permission to fetch that message.", ephemeral=True)
         except discord.HTTPException as e:
             await ctx.response.send_message(f"An error occurred while fetching the message:\n```{e}```", ephemeral=True)
-    
+
+
+    # COMMAND: /classify user
+    # This command takes a user and classifies them according to their danger level
+    @app_commands.command(
+        name = "user",
+        description = "Classifies a user according to their danger level"
+    )
+    @app_commands.describe(
+        user = "The user to classify",
+        verbose = "Show detailed message information"
+    )
+    async def classify_user(self, ctx, user: discord.Member, verbose: bool = False):
+        await ctx.response.send_message(embed=classify_user_with_output(user, verbose))
+
 
 
 

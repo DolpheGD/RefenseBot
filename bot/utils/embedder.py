@@ -1,5 +1,6 @@
 import discord
 from bot.ml.classifier import classify_danger_level
+from bot.services.update_user import get_top_ten_and_avg
 
 def classify_with_output(message):
     """
@@ -13,13 +14,40 @@ def classify_with_output(message):
 
     color = get_danger_color(results["Danger"])
 
-
     embed = discord.Embed(
        title="**Results**",
        description=desc,
        color=color
     )
 
+    return embed
+
+
+def classify_user_with_output(user: discord.Member, verbose = False):
+    top_ten, avg_danger = get_top_ten_and_avg(user.id)
+    color = get_danger_color(avg_danger)
+
+    
+    embed = discord.Embed(
+       title=f"**⚠️ {user.display_name}'s Danger ⚠️**",
+       color=color
+    )
+
+    if len(top_ten) <= 0:
+        value_output = "*[No Data]*"
+        message_output = "*[No Data]*"
+    else:
+        value_output = f'{avg_danger:.2%}'
+        message_output = ""
+        for num, message in enumerate(top_ten):
+            if verbose:
+                message_output += f'{num}. "{message.content}" (Danger: {message.danger_score:.2%}) (ID: {message.message_id})\n'
+            else:
+                message_output += f'{num}. "{message.content}"\n'
+
+    embed.set_thumbnail(url=user.avatar.url)
+    embed.add_field(name='Danger Score', value=value_output)
+    embed.add_field(name='Messages', value=message_output, inline=False)
 
     return embed
 

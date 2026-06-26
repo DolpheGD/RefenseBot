@@ -78,11 +78,11 @@ def classify_danger_level(message):
     )
 
     concern = min(
-        results["SH"] + (toxicity_score * 0.10),
+        results["SH"] + (toxicity_score * 0.05),
         1.0
     )
 
-    danger = sexual * 0.50 + hate * 0.90 + concern
+    danger = sexual * 0.60 + hate * 0.90 + concern * 0.5
     for label, prob in results.items():
         if label not in ["OK"]:
             if prob > 0.25: #if specifically high in any category, add danger
