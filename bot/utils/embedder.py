@@ -1,16 +1,21 @@
 import discord
 from bot.ml.classifier import classify_danger_level
-from bot.services.get_users import get_top_ten_and_avg, get_ten_higher_danger
+from bot.services.get_users import get_top_ten_and_avg, get_ten_higher_danger, get_total_messages
 
-def classify_with_output(message):
+async def classify_with_output(message):
     """
     classify_danger_level output, using discord embeds
     """
-    results = classify_danger_level(message)
+    results = await classify_danger_level(message)
 
-    desc = ""
+    if len(message) > 100:
+        desc = f'"{message[:100]} (...)"'
+    else:
+        desc = f'"{message}"'
+
+    value = ""
     for category, score in results.items():
-        desc += f'{category}: {score:.2%}\n'
+        value += f'{category}: {score:.2%}\n'
 
     color = get_danger_color(results["Danger"])
 
@@ -20,12 +25,18 @@ def classify_with_output(message):
        color=color
     )
 
+    embed.add_field(name="Breakdown", value=value, inline=False)
+
     return embed
 
 
 
-def classify_user_with_output(user: discord.Member, verbose = False):
-    top_ten, avg_danger = get_top_ten_and_avg(user.id)
+async def classify_user_with_output(user: discord.Member, verbose = False):
+    """
+    returns a discord embed of the top 10 most dangerous messages for the user, and their average danger score
+    """
+    top_ten, avg_danger = await get_top_ten_and_avg(user.id, user.guild)
+    total_messages = await get_total_messages(user.id, user.guild)
     color = get_danger_color(avg_danger)
     is_no_data = False
     
@@ -33,7 +44,7 @@ def classify_user_with_output(user: discord.Member, verbose = False):
         desc = "*[No Data]*"
         is_no_data = True
     else:
-        desc = f"Danger Score: {avg_danger:.2%}"
+        desc = f"Danger Score: {avg_danger:.2%}\nTotal Messages: {total_messages}"
 
     
     embed = discord.Embed(
@@ -52,7 +63,7 @@ def classify_user_with_output(user: discord.Member, verbose = False):
     for num, message in enumerate(top_ten, start=1):
         name_text = f'{num}. '
         if len(message.content) >= 50:
-            name_text += f'{message.content[:50]} ...'
+            name_text += f'{message.content[:50]} (...)'
             if verbose:
                 name_text += f' ({len(message.content) - 50} more)'
         else:
@@ -60,18 +71,21 @@ def classify_user_with_output(user: discord.Member, verbose = False):
 
         value_text = ""
         if verbose:
-            value_text += f'(Danger: {message.danger_score:.2%}) (Hate: {message.hate_score:.2%}) (Sexual: {message.sexual_score:.2%}) (Sexual: {message.concern_score:.2%}) (ID: {message.message_id})\n'
+            value_text += f'(Danger: {message.danger_score:.2%}) (Hate: {message.hate_score:.2%}) (Sexual: {message.sexual_score:.2%}) (Concern: {message.concern_score:.2%}) (Scam: {message.scam_score:.2%}) (ID: {message.message_id})\n'
 
         embed.add_field(name=name_text, value=value_text, inline=False)
 
     return embed
 
 
-def leaderboard_danger_output(users):
 
+async def leaderboard_danger_output(users, server_name):
+    """
+    returns a discord embed of the top 10 most dangerous users for the server
+    """
     color = get_danger_color(users[0].danger_score)
     embed = discord.Embed(
-        title="🏆 Danger Leaderboard 🏆",
+        title=f" 🏆 Danger Leaderboard for {server_name} 🏆 ",
         color=color
     )
 
@@ -83,7 +97,7 @@ def leaderboard_danger_output(users):
         if user.display_name:
             name = user.display_name
         else:
-            name = 'Unkonwn User'
+            name = 'Unknown User'
 
         embed.add_field(
             name=f"{i}. {name} ({user.danger_score:.2%})\n",
@@ -100,19 +114,19 @@ def leaderboard_danger_output(users):
 
 
 def get_danger_color(danger):
-    if danger > 1.2:
+    if danger > 1.5:
         color = discord.Color.dark_purple()
-    elif danger > 1.0:
+    elif danger > 1.2:
         color = 0 #black
-    elif danger > 0.85:
+    elif danger > 1.0:
         color = discord.Color.dark_red()
-    elif danger > 0.7:
+    elif danger > 0.8:
         color = discord.Color.red()
-    elif danger > 0.55:
+    elif danger > 0.65:
         color = discord.Color.orange()
-    elif danger > 0.40:
+    elif danger > 0.5:
         color = discord.Color.yellow()
-    elif danger > 0.20:
+    elif danger > 0.25:
         color = discord.Color.green()
     else:
         color = discord.Color.blue()

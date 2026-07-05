@@ -1,21 +1,44 @@
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy import Integer, String, Float, DateTime, ForeignKey, UniqueConstraint
 from datetime import datetime
 
 class Base(DeclarativeBase):
     pass
 
 
+class Guild(Base):
+    __tablename__ = "guilds"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    discord_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String)
+
+    users = relationship(
+        "UserProfile",
+        back_populates="guild",
+        cascade="all, delete-orphan"
+    )
+
+
+
 class UserProfile(Base):
     __tablename__ = "user_profiles"
 
+    __table_args__ = (
+        UniqueConstraint(
+            "guild_id",
+            "discord_id",
+            name="uq_guild_user"
+        ),
+    )
+
     id: Mapped[int] = mapped_column(primary_key=True)
-    discord_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    guild_id: Mapped[int] = mapped_column(ForeignKey("guilds.id"))
+    discord_id: Mapped[str] = mapped_column(String)
 
     username: Mapped[str] = mapped_column(String, default="")
-
     display_name: Mapped[str] = mapped_column(String, default="")
-
     avatar_url: Mapped[str] = mapped_column(String, default="")
 
     danger_score: Mapped[float] = mapped_column(Float, default=0.0)
@@ -25,12 +48,17 @@ class UserProfile(Base):
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
+    guild = relationship(
+        "Guild",
+        back_populates="users"
+    )
 
     messages = relationship(
         "DangerMessage",
         back_populates="user",
         cascade="all, delete-orphan"
     )
+
 
 
 class DangerMessage(Base):
@@ -50,6 +78,7 @@ class DangerMessage(Base):
     sexual_score: Mapped[float] = mapped_column(Float)
     hate_score: Mapped[float] = mapped_column(Float)
     concern_score: Mapped[float] = mapped_column(Float)
+    scam_score: Mapped[float] = mapped_column(Float)
 
     timestamp: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 

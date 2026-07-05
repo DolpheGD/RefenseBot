@@ -26,22 +26,23 @@ class UserUtils(commands.Cog):
         "`/classify text <text>` - Classifies the provided text.\n" \
         "`/classify id <message_id>` - Classifies the message with the given ID.\n" \
         "`/classify user <user> <verbose [Optional]>` - Classifies the user with a danger rating and dangerous messages.\n" \
-        "`/rankings` - Displays the top 10 most dangerous users.\n" \
-        "`/clear <user> [ADMIN]` - Clears user's history.\n" \
+        "`/leaderboard` - Displays the top 10 most dangerous users.\n" \
         "`/help` - Displays this help message."
         
         await ctx.response.send_message(output, ephemeral=True)
 
 
     # COMMAND: /leaderboard
-    # TODO: fix
-    # FIX THIS LATER (MOVE)
+    # This command lists the most dangerous users for this server
     @app_commands.command(
         name = "leaderboard",
-        description = "Lists the rankings of the most dangerous users"
+        description = "Lists the rankings of the most dangerous users for this server"
     )
     async def leaderboard(self, ctx):
-        users = get_ten_higher_danger()
+        server_id = ctx.guild.id
+        server_name = ctx.guild.name
+
+        users = await get_ten_higher_danger(server_id)
 
         if not users:
             await ctx.response.send_message(
@@ -49,7 +50,7 @@ class UserUtils(commands.Cog):
             )
             return
 
-        await ctx.response.send_message(embed=leaderboard_danger_output(users))
+        await ctx.response.send_message(embed=await leaderboard_danger_output(users, server_name))
 
 
 
