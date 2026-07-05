@@ -3,6 +3,7 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 from bot.config import BOT_KEY, SERVER_ID, DEV_MODE
+from bot.utils.check_files import check_files
 
 
 load_dotenv()
@@ -46,6 +47,9 @@ class MyClient(commands.Bot):
 
         print(f"Logged in as {self.user}")
 
+
 def run_bot():
+    #check required files
+    check_files()
     bot = MyClient()
     bot.run(BOT_KEY)
