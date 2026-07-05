@@ -17,6 +17,14 @@ class MyClient(commands.Bot):
 
 
     async def setup_hook(self):
+        # reset the command tree to avoid duplicate commands when reloading
+        guild = discord.Object(id=SERVER_ID)
+
+        # Clear guild commands
+        self.tree.clear_commands(guild=guild)
+        await self.tree.sync(guild=guild)
+
+
         for filename in os.listdir("bot/cogs"):
             if filename.endswith(".py"):
                 await self.load_extension(f"bot.cogs.{filename[:-3]}")
@@ -26,6 +34,7 @@ class MyClient(commands.Bot):
         try:
             if DEV_MODE:
                 guild = discord.Object(id=SERVER_ID)
+                
                 synced = await self.tree.sync(guild=guild)
                 print(f"Synced {len(synced)} guild commands.")
             else:
@@ -36,7 +45,6 @@ class MyClient(commands.Bot):
             print(e)
 
         print(f"Logged in as {self.user}")
-
 
 def run_bot():
     bot = MyClient()

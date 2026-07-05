@@ -58,8 +58,8 @@ async def classify_image(attachment):
         'Hate': ocr_result['Hate'],
         'Sexual': min(ocr_result['Sexual'] + nsfw_result.get('nsfw', 0), 1.0),
         'Concern': ocr_result['Concern'],
-        'Danger': ocr_result['Danger'] + nsfw_result.get('nsfw', 0) * 1.5,
-        'Scam': ocr_result['Scam'] * 1.5,
+        'Danger': ocr_result['Danger'] + nsfw_result.get('nsfw', 0) * 1.5 + ocr_result['Scam'] * 0.5,
+        'Scam': ocr_result['Scam'],
     }
 
     return final_result
