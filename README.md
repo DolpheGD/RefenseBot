@@ -76,10 +76,6 @@ Classify a user's danger level
 
 Display the highest-risk users in the server.
 
-`/clear`
-
-Admin-only command to clear a user's danger history.
-
 ---
 
 ## Architecture
@@ -87,6 +83,15 @@ Admin-only command to clear a user's danger history.
 Refender is structured for scalability:
 
 ## Database Design
+
+### Guild
+
+Stores:
+
+* Guild ID
+* Guild Name
+
+The bot runs on a per-server database, so each danger rating for a user is specific to that server.
 
 ### UserProfile
 

@@ -1,0 +1,27 @@
+# requirements for running this bot
+# Discord
+discord.py>=2.5.0
+
+# Environment variables
+python-dotenv>=1.1.0
+
+# Database
+SQLAlchemy>=2.0.40
+
+# AI / Machine Learning
+torch>=2.7.0
+transformers>=4.53.0
+huggingface-hub>=0.33.0
+accelerate>=1.9.0
+safetensors>=0.5.3
+
+# OCR
+easyocr>=1.7.2
+
+# Image processing
+Pillow>=11.3.0
+opencv-python>=4.12.0
+numpy>=2.3.1
+
+# Optional utilities
+tqdm>=4.67.1
