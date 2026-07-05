@@ -1,6 +1,6 @@
-# Refender
+# RefenseBot
 
-**Refender** is an AI-powered Discord moderation bot built around the philosophy of **Refense** the balance between **offense** and **defense**.
+**RefenseBot** is an AI-powered Discord moderation bot built around the philosophy of **Refense** the balance between **offense** and **defense**.
 
 ---
 
