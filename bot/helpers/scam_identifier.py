@@ -1,6 +1,6 @@
 # scam_identifier.py
 import re
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 class ScamIdentifier:
     def __init__(self):

@@ -1,6 +1,6 @@
 import discord
 from bot.ml.classifier import classify_danger_level
-from bot.services.get_users import get_top_ten_and_avg, get_ten_higher_danger, get_total_messages
+from bot.services.get_users import get_top_ten_and_avg, get_total_messages
 
 async def classify_with_output(message):
     """
@@ -74,37 +74,6 @@ async def classify_user_with_output(user: discord.Member, verbose = False):
             value_text += f'(Danger: {message.danger_score:.2%}) (Hate: {message.hate_score:.2%}) (Sexual: {message.sexual_score:.2%}) (Concern: {message.concern_score:.2%}) (Scam: {message.scam_score:.2%}) (ID: {message.message_id})\n'
 
         embed.add_field(name=name_text, value=value_text, inline=False)
-
-    return embed
-
-
-
-async def leaderboard_danger_output(users, server_name):
-    """
-    returns a discord embed of the top 10 most dangerous users for the server
-    """
-    color = get_danger_color(users[0].danger_score)
-    embed = discord.Embed(
-        title=f" 🏆 Danger Leaderboard for {server_name} 🏆 ",
-        color=color
-    )
-
-    if users[0].avatar_url:
-        embed.set_thumbnail(url=users[0].avatar_url)
-
-
-    for i, user in enumerate(users, start=1):
-        if user.display_name:
-            name = user.display_name
-        else:
-            name = 'Unknown User'
-
-        embed.add_field(
-            name=f"{i}. {name} ({user.danger_score:.2%})\n",
-            value="",
-            inline=False
-        )
-
 
     return embed
 

@@ -1,10 +1,6 @@
 # listeners to update data
-import discord
 
 from discord.ext import commands
-from discord import app_commands
-from bot.config import SERVER_ID
-from bot.ml.image_classifier import classify_image
 from bot.services.update_user import update_user
 from bot.utils.guild_decorator import guild_decorator
 
@@ -25,15 +21,21 @@ class Listeners(commands.Cog):
         content = str(message.clean_content)
         attachments = message.attachments
         
-        if len(content) > 0 and len(attachments) > 0:
-            print('Message with both text and attachments detected. Processing both.')
-        elif len(content) > 0:
-            print('Message with text detected. Processing text.')
-        elif len(attachments) > 0:
+        if len(attachments) > 0:
             print('Message with attachments detected. Processing attachments.')
-        else:
+            # we only accept images. If there is no image, and no content, return
+            has_image = False
+            for attachment in attachments:
+                if attachment.content_type and attachment.content_type.startswith("image/"):
+                    has_image = True
+                    break
+            if not has_image:
+                return
+            
+        if len(content) <= 0 and len(attachments) <= 0:
             print('Message with no text or attachments detected. Skipping processing.')
             return
+        
         
             
         user_id = str(message.author.id)

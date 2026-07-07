@@ -2,7 +2,6 @@ import discord
 
 from discord.ext import commands
 from discord import app_commands
-from bot.config import SERVER_ID
 from bot.utils.guild_decorator import guild_decorator
 from bot.utils.embedder import classify_user_with_output, classify_with_output
 

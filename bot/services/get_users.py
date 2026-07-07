@@ -1,5 +1,4 @@
 import discord
-from sqlalchemy import func
 
 from bot.database.session import SessionLocal
 from bot.database.models.user_model import UserProfile
@@ -29,7 +28,7 @@ async def get_top_ten_and_avg(discord_id: int, guild: discord.Guild):
 
 
 
-async def get_ten_higher_danger(server_id: int):
+async def get_highest_danger(server_id: int):
     """
     returns the ten highest danger individuals for the server
     """
@@ -39,7 +38,6 @@ async def get_ten_higher_danger(server_id: int):
             db.query(UserProfile)
             .filter_by(guild_id=server_id)
             .order_by(UserProfile.danger_score.desc())
-            .limit(10)
             .all()
         )
 
