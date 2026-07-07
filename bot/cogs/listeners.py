@@ -4,13 +4,13 @@ from discord.ext import commands
 from bot.services.update_user import update_user
 from bot.utils.guild_decorator import guild_decorator
 
-@guild_decorator
 class Listeners(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     # LISTENER: on_message
     # This listener triggers whenever a message is sent in the server
+    @guild_decorator
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author == self.bot.user:

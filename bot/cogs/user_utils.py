@@ -9,13 +9,13 @@ from bot.utils.guild_decorator import guild_decorator
 from bot.utils.views import LeaderboardView
 
 
-@guild_decorator
 class UserUtils(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     # COMMAND: /help
     # This command lists all available bot commands to the user.
+    @guild_decorator
     @app_commands.command(
         name = "help",
         description = "Lists all bot commands"
@@ -34,6 +34,7 @@ class UserUtils(commands.Cog):
     # COMMAND: /leaderboard
     # This command lists the most dangerous users for this server
     # lets the user go through the list of all users
+    @guild_decorator
     @app_commands.command(
         name = "leaderboard",
         description = "Lists the rankings of the most dangerous users for this server"
@@ -57,18 +58,19 @@ class UserUtils(commands.Cog):
             view=view
         )
 
-"""
+
     # COMMAND: /vote
     # This command displays the vote url. for now it just gives one vote
+    @guild_decorator
     @app_commands.command(
         name = "vote",
         description = "votes"
     )
     @app_commands.default_permissions(administrator=True)
     async def vote(self, ctx: discord.Interaction):
-        add_vote(ctx.user.id, ctx.guild)
+        await add_vote(ctx.user.id, ctx.guild)
         await ctx.response.send_message("Added 1 vote")
-"""
+
 
 async def setup(bot):
     await bot.add_cog(UserUtils(bot))

@@ -18,49 +18,37 @@ class MyClient(commands.Bot):
 
 
     async def setup_hook(self):
-        guild = discord.Object(id=SERVER_ID)
+        if not DEV_MODE:
+            guild = discord.Object(id=SERVER_ID)
+
+            self.tree.clear_commands(guild=guild)
+            await self.tree.sync(guild=guild)
+
 
         for filename in os.listdir("bot/cogs"):
             if filename.endswith(".py"):
-                extension = f"bot.cogs.{filename[:-3]}"
-                await self.load_extension(f"bot.cogs.{filename[:-3]}")
-                print(f"Loaded {extension}")
+                await self.load_extension(
+                    f"bot.cogs.{filename[:-3]}"
+                )
 
-
-        # Clear and resync guild commands
-        self.tree.clear_commands(guild=guild)
-        print("Cleared guild commands")
-
-    async def on_ready(self):
-        try:
-            if DEV_MODE:
-                guild = discord.Object(id=SERVER_ID)
-                
-                synced = await self.tree.sync(guild=guild)
-                print(f"Synced {len(synced)} guild commands.")
-            else:
-                synced = await self.tree.sync()
-                print(f"Synced {len(synced)} global commands.")
-
-        except Exception as e:
-            print(e)
-
-        print("Registered commands:")
-
-        for cmd in self.tree.get_commands(guild=discord.Object(id=SERVER_ID)):
-            print(cmd.name)
-
+        if DEV_MODE:
             guild = discord.Object(id=SERVER_ID)
 
-        commands = await self.tree.fetch_commands(guild=guild)
+            synced = await self.tree.sync(guild=guild)
 
-        print("Discord has these commands:")
+            print(
+                f"Synced {len(synced)} guild commands"
+            )
 
-        for command in commands:
-            print(command.name, command.type)
-            if hasattr(command, "options"):
-                print(command.options)
+        else:
+            synced = await self.tree.sync()
 
+            print(
+                f"Synced {len(synced)} global commands"
+            )
+
+
+    async def on_ready(self):
         print(f"Logged in as {self.user}")
 
 
