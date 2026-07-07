@@ -54,6 +54,22 @@ async def get_or_create_guild(db, message_guild: discord.Guild):
     return guild
 
 
+async def add_vote(discord_id: str, guild: discord.Guild):
+    """
+    adds a vote to a user
+    """
+    db = SessionLocal()
+    try:
+        await get_or_create_guild(db, guild)
+        user = await get_or_create_user(db, discord_id, guild)
+
+        user.votes += 1
+        db.commit()
+
+    finally:
+        db.close()
+
+
 
 async def update_user(discord_id: str, message_id: str, content: str, timestamp: datetime, username: str, display_name: str, avatar_url: str, messsage_guild: discord.Guild, attachments: list[discord.Attachment] = []):
     """

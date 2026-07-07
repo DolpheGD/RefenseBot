@@ -1,5 +1,5 @@
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import Integer, String, Float, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Integer, String, Float, ForeignKey, UniqueConstraint
 from datetime import datetime
 
 class Base(DeclarativeBase):
@@ -19,7 +19,6 @@ class Guild(Base):
         back_populates="guild",
         cascade="all, delete-orphan"
     )
-
 
 
 class UserProfile(Base):
@@ -44,6 +43,7 @@ class UserProfile(Base):
     danger_score: Mapped[float] = mapped_column(Float, default=0.0)
 
     total_messages: Mapped[int] = mapped_column(Integer, default=0)
+    votes: Mapped[int] = mapped_column(default=0)
 
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
@@ -58,8 +58,7 @@ class UserProfile(Base):
         back_populates="user",
         cascade="all, delete-orphan"
     )
-
-
+    
 
 class DangerMessage(Base):
     __tablename__ = "danger_messages"

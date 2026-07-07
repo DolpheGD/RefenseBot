@@ -63,3 +63,18 @@ async def get_total_messages(discord_id: int, guild: discord.Guild):
         return total_messages
     finally:
         db.close()
+
+
+async def get_vote_count(discord_id: int, guild: discord.Guild):
+    """
+    returns the total number of votes accumulated for a user in this guild
+    """
+    db = SessionLocal()
+    try:
+        await get_or_create_guild(db, guild)
+        user = await get_or_create_user(db, discord_id, guild)
+        votes = user.votes
+
+        return votes
+    finally:
+        db.close()

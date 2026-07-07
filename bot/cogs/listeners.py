@@ -22,7 +22,6 @@ class Listeners(commands.Cog):
         attachments = message.attachments
         
         if len(attachments) > 0:
-            print('Message with attachments detected. Processing attachments.')
             # we only accept images. If there is no image, and no content, return
             has_image = False
             for attachment in attachments:
@@ -35,6 +34,8 @@ class Listeners(commands.Cog):
         if len(content) <= 0 and len(attachments) <= 0:
             print('Message with no text or attachments detected. Skipping processing.')
             return
+        else:
+            print('Message Processing.')
         
         
             

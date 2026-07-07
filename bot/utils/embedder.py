@@ -1,6 +1,6 @@
 import discord
 from bot.ml.classifier import classify_danger_level
-from bot.services.get_users import get_top_ten_and_avg, get_total_messages
+from bot.services.get_users import get_top_ten_and_avg, get_total_messages, get_vote_count
 
 async def classify_with_output(message):
     """
@@ -37,6 +37,7 @@ async def classify_user_with_output(user: discord.Member, verbose = False):
     """
     top_ten, avg_danger = await get_top_ten_and_avg(user.id, user.guild)
     total_messages = await get_total_messages(user.id, user.guild)
+    votes = await get_vote_count(user.id, user.guild)
     color = get_danger_color(avg_danger)
     is_no_data = False
     
@@ -44,7 +45,7 @@ async def classify_user_with_output(user: discord.Member, verbose = False):
         desc = "*[No Data]*"
         is_no_data = True
     else:
-        desc = f"Danger Score: {avg_danger:.2%}\nTotal Messages: {total_messages}"
+        desc = f"Danger Score: {avg_danger:.2%}\nTotal Messages: {total_messages}\nVotes: {votes}"
 
     
     embed = discord.Embed(
