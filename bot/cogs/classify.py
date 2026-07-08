@@ -41,16 +41,18 @@ class Classify(commands.GroupCog, name="classify"):
     )
     async def classify_id(self, ctx: discord.Interaction, message_id: str):
         try:
+            await ctx.response.defer()
+
             message = await ctx.channel.fetch_message(message_id)
             content = message.content
             attachments = message.attachments
-            await ctx.response.send_message(embed=await classify_with_output(content, message_id, attachments))
+            await ctx.followup.send(embed=await classify_with_output(content, message_id, attachments))
         except discord.NotFound:
-            await ctx.response.send_message("Message not found.", ephemeral=True)
+            await ctx.followup.send("Message not found.", ephemeral=True)
         except discord.Forbidden:
-            await ctx.response.send_message("I do not have permission to fetch that message.", ephemeral=True)
+            await ctx.followup.send("I do not have permission to fetch that message.", ephemeral=True)
         except discord.HTTPException as e:
-            await ctx.response.send_message(f"An error occurred while fetching the message:\n```{e}```", ephemeral=True)
+            await ctx.followup.send(f"An error occurred while fetching the message:\n```{e}```", ephemeral=True)
 
 
     # COMMAND: /classify user

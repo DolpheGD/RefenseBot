@@ -11,7 +11,9 @@ async def classify_message_and_image(content: str, message_id: str = "", attachm
     """
     # classify message
     # the bigger danger score is from the image. We only keep track of the max of either the text or the image, not both. This is to avoid double counting.
-    scores = await classify_danger_level(content)
+    
+    message_text = content
+    scores = await classify_danger_level(message_text)
 
     is_image = False
     for attachment in attachments:
@@ -24,8 +26,8 @@ async def classify_message_and_image(content: str, message_id: str = "", attachm
                 scores["Concern"] = result["Concern"]
                 scores["Scam"] = result["Scam"]
                 is_image = True
-    
-    if is_image: 
-        content = f"[Image Attachment: {message_id}]"
 
-    return scores, content, is_image
+    if is_image: 
+        message_text = f"[Image Attachment: {message_id}]"
+
+    return scores, message_text, is_image

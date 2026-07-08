@@ -2,7 +2,7 @@ import discord
 from bot.ml.all_classifier import classify_message_and_image
 from bot.services.get_users import get_is_banned, get_top_ten_and_avg, get_total_messages, get_vote_count
 
-async def classify_with_output(content: str, message_id: str, attachments: list[discord.Attachment] = []):
+async def classify_with_output(content: str, message_id: str = "", attachments: list[discord.Attachment] = []):
     """
     classify_danger_level output, using discord embeds
     """
@@ -14,7 +14,7 @@ async def classify_with_output(content: str, message_id: str, attachments: list[
         desc = f'"{new_content}"'
 
     if is_image:
-        desc += f'(Has image attachment)'
+        desc += f'\n(Has image attachment)'
 
     value = ""
     for category, score in results.items():

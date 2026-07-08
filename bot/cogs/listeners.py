@@ -37,8 +37,7 @@ class Listeners(commands.Cog):
             print('Message with no text or attachments detected. Skipping processing.')
             return
         else:
-            print('Message Processing.')
-        
+            print(f'Message Processing "{content}" with {len(attachments)} attachments.')
         
             
         user_id = str(message.author.id)
