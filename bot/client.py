@@ -3,6 +3,7 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 from bot.config import BOT_KEY, SERVER_ID, DEV_MODE
+from bot.utils.sync_bans import sync_bans
 from bot.utils.check_files import check_files
 
 
@@ -18,7 +19,8 @@ class MyClient(commands.Bot):
 
 
     async def setup_hook(self):
-        if not DEV_MODE:
+        debug = True
+        if not DEV_MODE or debug:
             guild = discord.Object(id=SERVER_ID)
 
             self.tree.clear_commands(guild=guild)
@@ -56,4 +58,5 @@ def run_bot():
     #check required files
     check_files()
     bot = MyClient()
+    sync_bans(bot)
     bot.run(BOT_KEY)

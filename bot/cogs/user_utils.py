@@ -4,7 +4,6 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from bot.services.get_users import get_highest_danger
-from bot.services.update_user import add_vote
 from bot.utils.guild_decorator import guild_decorator
 from bot.utils.views import LeaderboardView
 
@@ -58,18 +57,6 @@ class UserUtils(commands.Cog):
             view=view
         )
 
-
-    # COMMAND: /vote
-    # This command displays the vote url. for now it just gives one vote
-    @guild_decorator
-    @app_commands.command(
-        name = "vote",
-        description = "votes"
-    )
-    @app_commands.default_permissions(administrator=True)
-    async def vote(self, ctx: discord.Interaction):
-        await add_vote(ctx.user.id, ctx.guild)
-        await ctx.response.send_message("Added 1 vote")
 
 
 async def setup(bot):

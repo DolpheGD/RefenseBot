@@ -3,8 +3,7 @@ from datetime import datetime
 import discord
 from bot.database.session import SessionLocal
 from bot.database.models.user_model import DangerMessage, Guild, UserProfile
-from bot.ml.classifier import classify_danger_level
-from bot.ml.image_classifier import classify_image
+from bot.ml.all_classifier import classify_message_and_image
 
 
 async def get_or_create_user(db, discord_id: str, message_guild: discord.Guild):
@@ -88,28 +87,11 @@ async def update_user(discord_id: str, message_id: str, content: str, timestamp:
         user.display_name = display_name
         user.avatar_url = avatar_url
 
-        # classify message
-        # the bigger danger score is from the image. We only keep track of the max of either the text or the image, not both. This is to avoid double counting.
-        scores = await classify_danger_level(content)
-
-        is_image = False
-        for attachment in attachments:
-            if attachment.content_type and attachment.content_type.startswith("image/"):
-                result = await classify_image(attachment)
-                if result["Danger"] > scores["Danger"]: #update new scores if the image is more dangerous than the text
-                    scores["Danger"] = result["Danger"]
-                    scores["Sexual"] = result["Sexual"]
-                    scores["Hate"] = result["Hate"]
-                    scores["Concern"] = result["Concern"]
-                    scores["Scam"] = result["Scam"]
-                    is_image = True
-        
-        if is_image: 
-            content = f"[Image Attachment: {message_id}]"
+        scores, new_content, is_image = await classify_message_and_image(content, message_id, attachments)
             
         new_message = DangerMessage(
             message_id=str(message_id),
-            content=content,
+            content=new_content,
             danger_score=scores["Danger"],
             sexual_score=scores["Sexual"],
             hate_score=scores["Hate"],

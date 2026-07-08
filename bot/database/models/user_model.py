@@ -1,5 +1,5 @@
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import Integer, String, Float, ForeignKey, UniqueConstraint
+from sqlalchemy import Integer, String, Float, ForeignKey, UniqueConstraint, Boolean
 from datetime import datetime
 
 class Base(DeclarativeBase):
@@ -13,6 +13,8 @@ class Guild(Base):
 
     discord_id: Mapped[str] = mapped_column(String, unique=True, index=True)
     name: Mapped[str] = mapped_column(String)
+
+    allow_votes: Mapped[bool] = mapped_column(Boolean)
 
     users = relationship(
         "UserProfile",
@@ -44,6 +46,7 @@ class UserProfile(Base):
 
     total_messages: Mapped[int] = mapped_column(Integer, default=0)
     votes: Mapped[int] = mapped_column(default=0)
+    is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
 
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)

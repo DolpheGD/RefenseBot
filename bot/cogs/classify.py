@@ -42,7 +42,9 @@ class Classify(commands.GroupCog, name="classify"):
     async def classify_id(self, ctx: discord.Interaction, message_id: str):
         try:
             message = await ctx.channel.fetch_message(message_id)
-            await ctx.response.send_message(embed=await classify_with_output(message.content))
+            content = message.content
+            attachments = message.attachments
+            await ctx.response.send_message(embed=await classify_with_output(content, message_id, attachments))
         except discord.NotFound:
             await ctx.response.send_message("Message not found.", ephemeral=True)
         except discord.Forbidden:
@@ -58,10 +60,12 @@ class Classify(commands.GroupCog, name="classify"):
         description = "Classifies a user according to their danger level"
     )
     @app_commands.describe(
-        user = "The user to classify",
+        user = "The user to classify (default is yourself)",
         verbose = "Show detailed message information"
     )
-    async def classify_user(self, ctx: discord.Interaction, user: discord.Member, verbose: bool = False):
+    async def classify_user(self, ctx: discord.Interaction, user: discord.User = None, verbose: bool = False):
+        if user is None:
+            user = ctx.user
         await ctx.response.send_message(embed=await classify_user_with_output(user, verbose))
 
 

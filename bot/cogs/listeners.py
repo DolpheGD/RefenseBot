@@ -1,6 +1,8 @@
 # listeners to update data
 
+import discord
 from discord.ext import commands
+from bot.services.get_users import set_user_banned
 from bot.services.update_user import update_user
 from bot.utils.guild_decorator import guild_decorator
 
@@ -53,6 +55,25 @@ class Listeners(commands.Cog):
 
         await update_user(user_id, message_id, content, message_time, username, display_name, avatar_url, messsage_guild, attachments)
         
+        
+    @guild_decorator
+    @commands.Cog.listener()
+    async def on_member_ban(self, guild: discord.Guild, user: discord.User):
+        await set_user_banned(
+            discord_id=user.id,
+            guild=guild,
+            banned=True
+        )
+
+
+    @guild_decorator
+    @commands.Cog.listener()
+    async def on_member_unban(self, guild: discord.Guild, user: discord.User):
+        await set_user_banned(
+            discord_id=user.id,
+            guild=guild,
+            banned=False
+        )
 
 
 async def setup(bot):
