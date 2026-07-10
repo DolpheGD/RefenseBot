@@ -51,10 +51,11 @@ async def classify_user_with_output(user: discord.Member, verbose = False):
         is_no_data = True
     else:
         desc = f"Danger Score: {avg_danger:.2%}\nTotal Messages: {total_messages}\nVotes: {votes}"
-    
-    if is_banned:
-        desc += "\n**Banned**"
-
+        if is_banned:
+            desc += "\n**Banned**"
+        card_achieve_text = get_danger_card_achievement(avg_danger)
+        message_achieve_text = get_message_count_achievement(total_messages)
+        desc += '\n\n**Achievements:**\n' + card_achieve_text + '\n' + message_achieve_text
     
     embed = discord.Embed(
        title=f"**⚠️ {user.display_name}'s Danger ⚠️**",
@@ -93,11 +94,11 @@ async def classify_user_with_output(user: discord.Member, verbose = False):
 
 def get_danger_color(danger):
     if danger > 1.5:
-        color = discord.Color.dark_purple()
+        color = discord.Color.from_rgb(48, 4, 51)
     elif danger > 1.2:
         color = 0 #black
     elif danger > 1.0:
-        color = discord.Color.dark_red()
+        color = discord.Color.from_rgb(69, 38, 5)
     elif danger > 0.8:
         color = discord.Color.red()
     elif danger > 0.65:
@@ -110,3 +111,49 @@ def get_danger_color(danger):
         color = discord.Color.blue()
     return color
     
+
+def get_danger_card_achievement(danger):
+    if danger > 1.5:
+        card = "🟪 T-Card"
+    elif danger > 1.2:
+        card = "⬛ Black Card"
+    elif danger > 1.0:
+        card = "🟫 Brown Card"
+    elif danger > 0.8:
+        card = "🟥 Red Card"
+    elif danger > 0.65:
+        card = "🟧 Orange Card"
+    elif danger > 0.5:
+        card = "🟨 Yellow Card"
+    elif danger > 0.25:
+        card = "🟩 Green Card"
+    else:
+        card = "🟦 Blue Card"
+    return card
+
+
+def get_message_count_achievement(message_count):
+    if message_count >= 100000:
+        message = f'☄️ Chat God'
+    elif message_count >= 50000:
+        message = f'👑 The Chosen Chatter ({message_count}/100000)'
+    elif message_count >= 10000:
+        message = f'🌟 No Life Chatter ({message_count}/50000)'
+    elif message_count >= 5000:
+        message = f'⭐ Ultimate Chatter ({message_count}/10000)'
+    elif message_count >= 2500:
+        message = f'✨ Devoted Chatter ({message_count}/5000)'
+    elif message_count >= 1000:
+        message = f'💫 Dedicated Chatter ({message_count}/2500)'
+    elif message_count >= 500:
+        message = f'🏅 Frequent Chatter ({message_count}/1000)'
+    elif message_count >= 250:
+        message = f'🥈 Regular Chatter ({message_count}/500)'
+    elif message_count >= 100:
+        message = f'🥉 Chatter ({message_count}/250)'
+    elif message_count >= 25:
+        message = f'🌲 New Chatter ({message_count}/100)'
+    else:
+        message = f'🪦 Unknown Chatter ({message_count}/25)'
+
+    return message
