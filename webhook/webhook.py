@@ -3,7 +3,6 @@ import topgg
 from bot.config import WEBHOOK_SECRET
 
 async def setup_webhook(bot, TOPGG_WEBHOOK_PORT = 5000):
-    print(f"AUTH KEY LOADED: {repr(WEBHOOK_SECRET)}")
     webhook_manager = topgg.WebhookManager(bot).dbl_webhook(
         route="/dblwebhook",
         auth_key=WEBHOOK_SECRET
