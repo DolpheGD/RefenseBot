@@ -1,10 +1,11 @@
 import discord
 
-from bot.services.get_users import get_vote_allow, set_vote_allow
-from bot.services.update_user import add_vote
+from bot.services.get_users import get_last_vote, get_vote_allow, set_vote_allow
+from bot.services.update_user import add_vote, spend_vote
 from discord.ext import commands
 from discord import app_commands
 from bot.utils.guild_decorator import guild_decorator
+from bot.utils.views import VoteView
 
 
 @guild_decorator
@@ -13,24 +14,22 @@ class Vote(commands.GroupCog, name="vote"):
         self.bot = bot
 
 
-    # COMMAND: /vote
-    # This command displays the vote url. for now it just gives one vote
+    # COMMAND: /vote link
+    # This command displays the vote url.
     @app_commands.command(
         name = "link",
         description = "Gives the vote link"
     )
-    @app_commands.default_permissions(administrator=True)
     async def link(self, ctx: discord.Interaction):
-        can_vote = await get_vote_allow(ctx.guild)
-        if can_vote:
-            await add_vote(ctx.user.id, ctx.guild)
-            await ctx.response.send_message("Added 1 vote", ephemeral= True)
-        else:
-            await ctx.response.send_message(f"Voting disabled for `{ctx.guild.name}`", ephemeral= True)        
+        last_voted = await get_last_vote(ctx.user.id, ctx.guild)
+        view = VoteView(last_voted)
+            
+        await ctx.response.send_message(embed=view.create_embed(), view=view)
+     
 
 
-    # COMMAND: /vote
-    # This command displays the vote url. for now it just gives one vote
+    # COMMAND: /vote allow
+    # This command is admin only. Toggles vote allow for this server
     @app_commands.command(
         name = "allow",
         description = "Toggles if voting is enabled on this server"
@@ -50,8 +49,21 @@ class Vote(commands.GroupCog, name="vote"):
             await ctx.response.send_message(f"Voting set to {vote} for `{ctx.guild.name}`", ephemeral=True)
 
 
-
-
-
+    # COMMAND: /vote spend
+    @app_commands.command(
+        name = "spend",
+        description = "Spend a vote to remove your most dangerous message. Only allowed if server enables it."
+    )
+    async def spend(self, ctx: discord.Interaction):
+        can_vote = await get_vote_allow(ctx.guild)
+        if can_vote:
+            success, message = await spend_vote(ctx.user.id, ctx.guild)
+            if not success:
+                await ctx.response.send_message(f"Vote spending failed.\n**Reason:** `{message}`", ephemeral=True)
+            else:
+                await ctx.response.send_message(f"Vote spent successfully.\n **Removed:** `{message}`", ephemeral=True)
+        else:
+            await ctx.response.send_message(f"Vote spending for `{ctx.guild.name}` is disabled", ephemeral= True)
+            
 async def setup(bot):
     await bot.add_cog(Vote(bot))

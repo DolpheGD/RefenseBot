@@ -40,23 +40,24 @@ async def classify_user_with_output(user: discord.Member, verbose = False):
     """
     top_ten, avg_danger = await get_top_ten_and_avg(user.id, user.guild)
     total_messages = await get_total_messages(user.id, user.guild)
-    votes = await get_vote_count(user.id, user.guild)
+    votes, votes_used = await get_vote_count(user.id, user.guild)
     is_banned = await get_is_banned(user.id, user.guild)
 
     color = get_danger_color(avg_danger)
-    is_no_data = False
+
+
+    desc = f"Danger Score: {avg_danger:.2%}\nTotal Messages: {total_messages}\nVotes: {votes}\nVotes used: {votes_used}"
+    if is_banned:
+        desc += "\n**Banned**"
+    card_achieve_text = get_danger_card_achievement(avg_danger)
+    message_achieve_text = get_message_count_achievement(total_messages)
+    desc += '\n\n**Achievements:**\n' + card_achieve_text + '\n' + message_achieve_text
     
-    if len(top_ten) <= 0:
-        desc = "*[No Data]*"
-        is_no_data = True
-    else:
-        desc = f"Danger Score: {avg_danger:.2%}\nTotal Messages: {total_messages}\nVotes: {votes}"
-        if is_banned:
-            desc += "\n**Banned**"
-        card_achieve_text = get_danger_card_achievement(avg_danger)
-        message_achieve_text = get_message_count_achievement(total_messages)
-        desc += '\n\n**Achievements:**\n' + card_achieve_text + '\n' + message_achieve_text
-    
+    if len(top_ten) > 0:
+        worst_achieve = get_worst_message_achievement(top_ten[0].danger_score)
+        if worst_achieve is not None:
+            desc += f'\n{worst_achieve}'
+
     embed = discord.Embed(
        title=f"**⚠️ {user.display_name}'s Danger ⚠️**",
        color=color,
@@ -66,7 +67,9 @@ async def classify_user_with_output(user: discord.Member, verbose = False):
     if user.avatar:
         embed.set_thumbnail(url=user.avatar.url)
     
-    if is_no_data:
+
+    if len(top_ten) <= 0:
+        embed.add_field(name='*[No Data]*', value="", inline=False)
         return embed
     
 
@@ -86,10 +89,6 @@ async def classify_user_with_output(user: discord.Member, verbose = False):
         embed.add_field(name=name_text, value=value_text, inline=False)
 
     return embed
-
-
-
-
 
 
 def get_danger_color(danger):
@@ -156,4 +155,21 @@ def get_message_count_achievement(message_count):
     else:
         message = f'🪦 Unknown Chatter ({message_count}/25)'
 
+    return message
+
+
+def get_worst_message_achievement(worst_danger):
+    if worst_danger >= 3.0:
+        message = f'☠️ Abhorrent Message'
+    elif worst_danger >= 2.5:
+        message = f'😵 Atrocious Message'
+    elif worst_danger >= 2.0:
+        message = f'🤮 Vile Message'
+    elif worst_danger >= 1.5:
+        message = f'😭 Terrible Message'
+    elif worst_danger >= 1.0:
+        message = f'🚨 Alarming Message'
+    else:
+        return None
+    
     return message

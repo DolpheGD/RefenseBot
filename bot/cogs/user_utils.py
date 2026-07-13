@@ -41,6 +41,7 @@ class UserUtils(commands.Cog):
     async def leaderboard(self, ctx: discord.Interaction):
         server_id = ctx.guild.id
         server_name = ctx.guild.name
+        author_id = ctx.user.id
 
         users = await get_highest_danger(server_id)
 
@@ -50,7 +51,7 @@ class UserUtils(commands.Cog):
             )
             return
         
-        view = LeaderboardView(users, server_name)
+        view = LeaderboardView(users, server_name, author_id)
 
         await ctx.response.send_message(
             embed=view.create_embed(),

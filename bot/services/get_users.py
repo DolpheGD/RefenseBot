@@ -76,8 +76,21 @@ async def get_vote_count(discord_id: int, guild: discord.Guild):
         await get_or_create_guild(db, guild)
         user = await get_or_create_user(db, discord_id, guild)
         votes = user.votes
+        votes_used = user.votes_used
 
-        return votes
+        return votes, votes_used
+    finally:
+        db.close()
+
+
+async def get_last_vote(discord_id: int, guild: discord.Guild):
+    db = SessionLocal()
+    try:
+        await get_or_create_guild(db, guild)
+        user = await get_or_create_user(db, discord_id, guild)
+        last_voted = user.last_voted
+        
+        return last_voted
     finally:
         db.close()
 
@@ -144,3 +157,4 @@ async def set_user_banned(discord_id: int, guild: discord.Guild, banned):
         
     finally:
         db.close()
+

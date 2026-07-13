@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 import discord
 from bot.database.session import SessionLocal
@@ -53,18 +53,63 @@ async def get_or_create_guild(db, message_guild: discord.Guild):
     return guild
 
 
-async def add_vote(discord_id: str, guild: discord.Guild):
+async def add_vote(discord_id: str):
     """
-    adds a vote to a user
+    adds a vote to a user, only by user ID. updates across all profiles
+    if no guild profile for that guild, then vote doesnt coutn.
+    """
+    db = SessionLocal()
+    try:
+        users = (
+            db.query(UserProfile)
+            .filter_by(discord_id=str(discord_id))
+            .all()
+        )
+        for user in users:
+            user.votes += 1
+            user.last_voted = datetime.now(timezone.utc)
+        
+        db.commit()
+
+    finally:
+        db.close()
+
+
+
+async def spend_vote(discord_id: str, guild: discord.Guild):
+    """
+    spends a vote from the user to remove a danger message (only enabled on servers that allow)
+    returns true if it was sucessful
+    returns false if it was not
     """
     db = SessionLocal()
     try:
         await get_or_create_guild(db, guild)
         user = await get_or_create_user(db, discord_id, guild)
 
-        user.votes += 1
-        db.commit()
+        top_messages = sorted(
+            user.messages,
+            key=lambda x: x.danger_score,
+            reverse=True
+        )
 
+        if len(top_messages) > 0:
+            if user.votes_used < user.votes:
+                user.votes_used += 1
+                highest = top_messages[0]
+                db.delete(highest)
+                db.commit()
+
+                await update_topten(user)
+
+                db.commit()
+                return True, highest.content
+            
+            else:
+                return False, "Need more votes"
+        else:
+            return False, "No messages to delete"
+    
     finally:
         db.close()
 
@@ -129,17 +174,25 @@ async def update_user(discord_id: str, message_id: str, content: str, timestamp:
 
         # update the new top 10
         if changed:
-            updated_top = sorted(
-                user.messages,
-                key=lambda x: x.danger_score,
-                reverse=True
-            )
-            user.danger_score = (
-                sum(msg.danger_score for msg in updated_top)
-                / len(updated_top)
-            )
-
+            await update_topten(user)
+            
         db.commit()
 
     finally:
         db.close()
+
+
+
+async def update_topten(user):
+    updated_top = sorted(
+        user.messages,
+        key=lambda x: x.danger_score,
+        reverse=True
+    )
+    if len(updated_top) <= 0:
+        user.danger_score = 0
+    else:
+        user.danger_score = (
+            sum(msg.danger_score for msg in updated_top)
+            / len(updated_top)
+        )

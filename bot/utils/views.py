@@ -1,10 +1,13 @@
 import discord
 
 from bot.utils.embedder import get_danger_color
+from datetime import datetime, timedelta, timezone
 
 class LeaderboardView(discord.ui.View):
-    def __init__(self, users, server_name):
+    def __init__(self, users, server_name, author_id):
         super().__init__(timeout=300)
+        self.author_id = author_id
+
         self.current_page = 0
         self.pages = [
             users[i:i+10]
@@ -12,6 +15,7 @@ class LeaderboardView(discord.ui.View):
         ]
         self.server_name = server_name
         self.update_buttons()
+        
 
 
     def create_embed(self):
@@ -46,6 +50,16 @@ class LeaderboardView(discord.ui.View):
         )
 
         return embed
+
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message(
+                "Only the message author can use this button.",
+                ephemeral=True
+            )
+            return False
+        return True
     
 
     @discord.ui.button(
@@ -89,3 +103,57 @@ class LeaderboardView(discord.ui.View):
         self.next.disabled = (
             self.current_page == len(self.pages) - 1
         )
+
+
+
+
+class VoteView(discord.ui.View):
+    def __init__(self, last_voted):
+        super().__init__(timeout=300)
+        self.last_voted = last_voted
+        self.add_item(
+            discord.ui.Button(
+                label="Vote",
+                url= "https://top.gg/bot/1518822102596190308",
+                style=discord.ButtonStyle.link
+            )
+        )
+
+    def create_embed(self):
+        last_voted = self.last_voted
+
+        if last_voted is not None and last_voted.tzinfo is None:
+            last_voted = last_voted.replace(tzinfo=timezone.utc)
+
+        now = datetime.now(timezone.utc)
+
+        if last_voted is None:
+            can_vote = True
+        else:
+            next_vote = last_voted + timedelta(hours=12)
+            can_vote = now >= next_vote
+
+        if can_vote:
+            embed = discord.Embed(
+                title=f"🗳️ Vote for RefenseBot",
+                description="✅ **You may vote now!**",
+                color=discord.Color.green()
+            )
+        else:
+            remaining = next_vote - now
+
+            hours = remaining.seconds // 3600
+            minutes = (remaining.seconds % 3600) // 60
+            embed = discord.Embed(
+                title="🕒 Vote Cooldown",
+                description=(
+                    "You have already voted.\n"
+                    f"**Come back in:** `{hours}h {minutes}m`"
+                ),
+                color=discord.Color.orange()
+            )
+
+        embed.set_footer(text="Thank you for supporting RefenseBot!")
+
+        return embed
+

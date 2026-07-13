@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from bot.config import BOT_KEY, SERVER_ID, DEV_MODE
 from bot.utils.sync_bans import sync_bans
 from bot.utils.check_files import check_files
-
+from webhook.webhook import setup_webhook
 
 load_dotenv()
 
@@ -15,10 +15,14 @@ class MyClient(commands.Bot):
         intents = discord.Intents.default()
         intents.message_content = True
         
-        super().__init__(command_prefix='!', intents=intents)
+        super().__init__(command_prefix='/', intents=intents)
 
 
     async def setup_hook(self):
+        await sync_bans(self)
+
+        await setup_webhook(self, 5000)
+
         debug = True
         if not DEV_MODE or debug:
             guild = discord.Object(id=SERVER_ID)
@@ -58,5 +62,4 @@ def run_bot():
     #check required files
     check_files()
     bot = MyClient()
-    sync_bans(bot)
     bot.run(BOT_KEY)
