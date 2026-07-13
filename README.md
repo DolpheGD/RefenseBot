@@ -94,6 +94,18 @@ Only for Administrator allowed servers, enables users to use voting credit to co
 
 ---
 
+#### User Utility
+
+`/achievements`
+
+Display various achievements the user can get from their stats
+
+`/help`
+
+Display information for all the commands to the user
+
+---
+
 ## Architecture
 
 Refender is structured for scalability:
