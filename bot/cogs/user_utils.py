@@ -70,7 +70,7 @@ class UserUtils(commands.Cog):
         name = "achievements",
         description = "Lists all possible achievements in Refensebot"
     )
-    async def leaderboard(self, ctx: discord.Interaction):
+    async def achievements(self, ctx: discord.Interaction):
         author = ctx.user
 
         view = AchievementGuideView(author)
