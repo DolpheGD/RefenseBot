@@ -106,9 +106,9 @@ async def spend_vote(discord_id: str, guild: discord.Guild):
                 return True, highest.content
             
             else:
-                return False, "Need more votes"
+                return False, "You need to vote before you spend.\nYou can check your vote balance with /classify user verbose=True"
         else:
-            return False, "No messages to delete"
+            return False, "No messages to delete."
     
     finally:
         db.close()

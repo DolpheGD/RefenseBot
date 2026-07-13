@@ -45,18 +45,34 @@ async def classify_user_with_output(user: discord.Member, verbose = False):
 
     color = get_danger_color(avg_danger)
 
+    # info
+    desc = f"Danger Score: {avg_danger:.2%}"
 
-    desc = f"Danger Score: {avg_danger:.2%}\nTotal Messages: {total_messages}\nVotes: {votes}\nVotes used: {votes_used}"
-    if is_banned:
-        desc += "\n**Banned**"
+    if verbose:
+        desc += '\nTotal Messages: {total_messages}\nVotes: {votes}\nVotes used: {votes_used}'
+        if is_banned:
+            desc += "\n**Banned**"
+
+    #achievement info
     card_achieve_text = get_danger_card_achievement(avg_danger)
     message_achieve_text = get_message_count_achievement(total_messages)
+    votes_achieve_text = get_voter_achievements(votes)
+    vote_spend_text = get_vote_spender_achievements(votes_used)
+
     desc += '\n\n**Achievements:**\n' + card_achieve_text + '\n' + message_achieve_text
     
+    if votes_achieve_text is not None:
+        desc += f'\n{votes_achieve_text}'
+
+    if vote_spend_text is not None:
+        desc += f'\n{vote_spend_text}'
+
     if len(top_ten) > 0:
         worst_achieve = get_worst_message_achievement(top_ten[0].danger_score)
         if worst_achieve is not None:
             desc += f'\n{worst_achieve}'
+
+
 
     embed = discord.Embed(
        title=f"**⚠️ {user.display_name}'s Danger ⚠️**",
@@ -132,8 +148,11 @@ def get_danger_card_achievement(danger):
 
 
 def get_message_count_achievement(message_count):
-    if message_count >= 100000:
-        message = f'☄️ Chat God'
+    refense_emoji = "<:refense:1526107149338411069>"
+    if message_count >= 1000000:
+        message = f'{refense_emoji} True Refense'
+    elif message_count >= 100000:
+        message = f'☄️ The Chat God'
     elif message_count >= 50000:
         message = f'👑 The Chosen Chatter ({message_count}/100000)'
     elif message_count >= 10000:
@@ -173,3 +192,40 @@ def get_worst_message_achievement(worst_danger):
         return None
     
     return message
+
+
+def get_voter_achievements(vote_count):
+    if vote_count >= 100:
+        message = f'❤️‍🔥 Ultimate Voter'
+    elif vote_count >= 50:
+        message = f'🔥 Legendary Voter ({vote_count}/100)'
+    elif vote_count >= 25:
+        message = f'💌 Super Voter ({vote_count}/50)'
+    elif vote_count >= 10:
+        message = f'🗳️ Epic Voter ({vote_count}/25)'
+    elif vote_count >= 5:
+        message = f'📝 Frequent Voter ({vote_count}/10)'
+    elif vote_count >= 3:
+        message = f'📨 Regular Voter ({vote_count}/5)'
+    elif vote_count >= 1:
+        message = f'✉️ Voter ({vote_count}/3)'
+    else:
+        return None
+        
+    return message
+
+def get_vote_spender_achievements(vote_spent):
+    if vote_spent >= 50:
+        message = f"🤯 The Past's Pulveriser"
+    elif vote_spent >= 25:
+        message = f'💥 History Eradicator ({vote_spent}/50)'
+    elif vote_spent >= 10:
+        message = f'💣 Danger Demolisher ({vote_spent}/25)'
+    elif vote_spent >= 5:
+        message = f'🧨 Danger Evader ({vote_spent}/10)'
+    elif vote_spent >= 3:
+        message = f'⚠️ Message Executor ({vote_spent}/5)'
+    elif vote_spent >= 1:
+        message = f'❌ Message Remover ({vote_spent}/3)'
+    else:
+        return None
