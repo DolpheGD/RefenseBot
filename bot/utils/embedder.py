@@ -229,3 +229,5 @@ def get_vote_spender_achievements(vote_spent):
         message = f'❌ Message Remover ({vote_spent}/3)'
     else:
         return None
+    
+    return message
