@@ -25,6 +25,9 @@ class UserUtils(commands.Cog):
         "`/classify id <message_id>` - Classifies the message with the given ID.\n" \
         "`/classify user <user> <verbose [Optional]>` - Classifies the user with a danger rating and dangerous messages.\n" \
         "`/leaderboard` - Displays the top 10 most dangerous users.\n" \
+        "`/vote link` - Displays the link to vote for bot.\n" \
+        "`/vote allow <vote [Optional]>` **(ADMIN ONLY)** - Toggle allowing `/vote spend` to remove dangerous messages using votes.\n" \
+        "`/vote spend` - Spend one vote to remove your most dangerous message. Only works in servers that enable it with `/vote allow`\n" \
         "`/help` - Displays this help message."
         
         await ctx.response.send_message(output, ephemeral=True)
