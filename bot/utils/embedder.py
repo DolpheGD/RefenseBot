@@ -49,7 +49,7 @@ async def classify_user_with_output(user: discord.Member, verbose = False):
     desc = f"Danger Score: {avg_danger:.2%}"
 
     if verbose:
-        desc += '\nTotal Messages: {total_messages}\nVotes: {votes}\nVotes used: {votes_used}'
+        desc += f'\nTotal Messages: {total_messages}\nVotes: {votes}\nVotes used: {votes_used}'
         if is_banned:
             desc += "\n**Banned**"
 
@@ -152,7 +152,7 @@ def get_message_count_achievement(message_count):
     if message_count >= 1000000:
         message = f'{refense_emoji} True Refense'
     elif message_count >= 100000:
-        message = f'☄️ The Chat God'
+        message = f'☄️ The Chat God ({message_count}/1000000)'
     elif message_count >= 50000:
         message = f'👑 The Chosen Chatter ({message_count}/100000)'
     elif message_count >= 10000:

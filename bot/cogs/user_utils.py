@@ -5,7 +5,7 @@ from discord.ext import commands
 from discord import app_commands
 from bot.services.get_users import get_highest_danger
 from bot.utils.guild_decorator import guild_decorator
-from bot.utils.views import LeaderboardView
+from bot.utils.views import AchievementGuideView, LeaderboardView
 
 
 class UserUtils(commands.Cog):
@@ -25,6 +25,7 @@ class UserUtils(commands.Cog):
         "`/classify id <message_id>` - Classifies the message with the given ID.\n" \
         "`/classify user <user> <verbose [Optional]>` - Classifies the user with a danger rating and dangerous messages.\n" \
         "`/leaderboard` - Displays the top 10 most dangerous users.\n" \
+        "`/achievements` - Displays the list of possible achievements in RefenseBot.\n" \
         "`/vote link` - Displays the link to vote for bot.\n" \
         "`/vote allow <vote [Optional]>` **(ADMIN ONLY)** - Toggle allowing `/vote spend` to remove dangerous messages using votes.\n" \
         "`/vote spend` - Spend one vote to remove your most dangerous message. Only works in servers that enable it with `/vote allow`\n" \
@@ -55,6 +56,24 @@ class UserUtils(commands.Cog):
             return
         
         view = LeaderboardView(users, server_name, author_id)
+
+        await ctx.response.send_message(
+            embed=view.create_embed(),
+            view=view
+        )
+
+
+    # COMMAND: /achievements
+    # This command lists all the possible achievements in Refensebot
+    @guild_decorator
+    @app_commands.command(
+        name = "achievements",
+        description = "Lists all possible achievements in Refensebot"
+    )
+    async def leaderboard(self, ctx: discord.Interaction):
+        author = ctx.user
+
+        view = AchievementGuideView(author)
 
         await ctx.response.send_message(
             embed=view.create_embed(),
