@@ -28,6 +28,25 @@ This preserves important signals and prevents dangerous behavior from being dilu
 
 ---
 
+## Setup
+
+1. Clone the repo and run the bootstrap script from the project root:
+   * Windows: double-click `setup.bat` (or run `python setup_bot.py`)
+   * macOS/Linux: `./setup.sh` (or `python3 setup_bot.py`)
+
+   This creates a `.venv` virtual environment, installs everything in
+   `requirements.txt`, generates a starter `.env` from `.env.example`, and
+   creates the local SQLite database tables.
+2. Fill in `.env` with your `BOT_KEY`, `SERVER_ID`, `HF_TOKEN`, and `TOPGG_TOKEN`.
+3. Re-run the setup script (or `python -m bot.database.db_init`) if you filled
+   in `.env` after the first run, so the database step can complete.
+4. Activate the virtual environment and start the bot:
+   * Windows: `.venv\Scripts\activate`
+   * macOS/Linux: `source .venv/bin/activate`
+   * `python start_bot.py`
+
+---
+
 ## Features
 
 ### AI-Powered Text Moderation
@@ -79,6 +98,10 @@ Display the highest-risk users in the server.
 ---
 
 #### Voting Integration with Top.gg
+
+Votes are detected by polling the top.gg API directly (`topgg.DBLClient`) on a
+timer - there's no inbound webhook or public port to expose, the bot checks
+and credits votes itself.
 
 `/vote link`
 

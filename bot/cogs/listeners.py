@@ -3,7 +3,7 @@
 import discord
 from discord.ext import commands
 from bot.services.get_users import set_user_banned
-from bot.services.update_user import update_user, add_vote
+from bot.services.update_user import update_user
 from bot.utils.guild_decorator import guild_decorator 
 
 class Listeners(commands.Cog):
@@ -73,16 +73,6 @@ class Listeners(commands.Cog):
             guild=guild,
             banned=False
         )
-
-    @guild_decorator
-    @commands.Cog.listener()
-    async def on_dbl_vote(self, data: dict):
-        user_id = int(data["user"])
-
-        await add_vote(user_id)
-
-        print(f"Vote credited for user {user_id}")
-
 
 async def setup(bot):
     await bot.add_cog(Listeners(bot))

@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from bot.config import BOT_KEY, SERVER_ID, DEV_MODE
 from bot.utils.sync_bans import sync_bans
 from bot.utils.check_files import check_files
-from webhook.webhook import setup_webhook
+from bot.services.topgg_service import setup_topgg
 
 load_dotenv()
 
@@ -21,7 +21,7 @@ class MyClient(commands.Bot):
     async def setup_hook(self):
         await sync_bans(self)
 
-        await setup_webhook(self, 5000)
+        self.topgg_service = await setup_topgg(self)
 
         debug = True
         if not DEV_MODE or debug:
@@ -56,6 +56,13 @@ class MyClient(commands.Bot):
 
     async def on_ready(self):
         print(f"Logged in as {self.user}")
+
+
+    async def close(self):
+        topgg_service = getattr(self, "topgg_service", None)
+        if topgg_service is not None:
+            topgg_service.stop()
+        await super().close()
 
 
 def run_bot():
