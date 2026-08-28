@@ -76,9 +76,33 @@ Classify a user's danger level
 
 Display the highest-risk users in the server.
 
-`/clear`
+---
 
-Admin-only command to clear a user's danger history.
+#### Voting Integration with Top.gg
+
+`/vote link`
+
+Display the vote link and when the user may vote again.
+
+`/vote allow`
+
+Allows admin to enable server-specific voting policies.
+
+`/vote spend`
+
+Only for Administrator allowed servers, enables users to use voting credit to control message history.
+
+---
+
+#### User Utility
+
+`/achievements`
+
+Display various achievements the user can get from their stats
+
+`/help`
+
+Display information for all the commands to the user
 
 ---
 
@@ -87,6 +111,16 @@ Admin-only command to clear a user's danger history.
 Refender is structured for scalability:
 
 ## Database Design
+
+### Guild
+
+Stores:
+
+* Guild ID
+* Guild Name
+* Vote enable option
+
+The bot runs on a per-server database, so each danger rating for a user is specific to that server.
 
 ### UserProfile
 
@@ -97,6 +131,7 @@ Stores:
 * Danger Score
 * Total Messages
 * Cached other user data
+* Voting information
 
 ---
 
@@ -121,6 +156,7 @@ Each user keeps only their highest-risk messages for efficient behavioral modeli
 * SQLite
 * Hugging Face Transformers
 * PyTorch
+* topggpy
 
 ---
 

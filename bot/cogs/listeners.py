@@ -1,20 +1,18 @@
 # listeners to update data
+
 import discord
-
 from discord.ext import commands
-from discord import app_commands
-from bot.config import SERVER_ID
-from bot.ml.image_classifier import classify_image
-from bot.services.update_user import update_user
-from bot.utils.guild_decorator import guild_decorator
+from bot.services.get_users import set_user_banned
+from bot.services.update_user import update_user, add_vote
+from bot.utils.guild_decorator import guild_decorator 
 
-@guild_decorator
 class Listeners(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     # LISTENER: on_message
     # This listener triggers whenever a message is sent in the server
+    @guild_decorator
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author == self.bot.user:
@@ -25,15 +23,21 @@ class Listeners(commands.Cog):
         content = str(message.clean_content)
         attachments = message.attachments
         
-        if len(content) > 0 and len(attachments) > 0:
-            print('Message with both text and attachments detected. Processing both.')
-        elif len(content) > 0:
-            print('Message with text detected. Processing text.')
-        elif len(attachments) > 0:
-            print('Message with attachments detected. Processing attachments.')
-        else:
+        if len(attachments) > 0:
+            # we only accept images. If there is no image, and no content, return
+            has_image = False
+            for attachment in attachments:
+                if attachment.content_type and attachment.content_type.startswith("image/"):
+                    has_image = True
+                    break
+            if not has_image:
+                return
+            
+        if len(content) <= 0 and len(attachments) <= 0:
             print('Message with no text or attachments detected. Skipping processing.')
             return
+        else:
+            print(f'Message Processing "{content}" with {len(attachments)} attachments.')
         
             
         user_id = str(message.author.id)
@@ -50,6 +54,34 @@ class Listeners(commands.Cog):
 
         await update_user(user_id, message_id, content, message_time, username, display_name, avatar_url, messsage_guild, attachments)
         
+        
+    @guild_decorator
+    @commands.Cog.listener()
+    async def on_member_ban(self, guild: discord.Guild, user: discord.User):
+        await set_user_banned(
+            discord_id=user.id,
+            guild=guild,
+            banned=True
+        )
+
+
+    @guild_decorator
+    @commands.Cog.listener()
+    async def on_member_unban(self, guild: discord.Guild, user: discord.User):
+        await set_user_banned(
+            discord_id=user.id,
+            guild=guild,
+            banned=False
+        )
+
+    @guild_decorator
+    @commands.Cog.listener()
+    async def on_dbl_vote(self, data: dict):
+        user_id = int(data["user"])
+
+        await add_vote(user_id)
+
+        print(f"Vote credited for user {user_id}")
 
 
 async def setup(bot):

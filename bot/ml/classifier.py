@@ -7,7 +7,7 @@ from bot.config import HF_TOKEN
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, pipeline
 from bot.helpers.scam_identifier import identify_scam
 from bot.helpers.slur_identifier import identify_slurs
-import torch 
+import torch
 
 CLASS_TERMS = {
     "S" : "Sexual",
@@ -117,3 +117,5 @@ async def classify_danger_level(message, image=False):
         danger += math.log(slurs["count"] + 1) * 2 + 0.2
 
     return {"Hate": hate, "Sexual": sexual, "Concern": concern, "Danger": danger, "Scam": scam}
+
+
