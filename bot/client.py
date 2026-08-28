@@ -61,7 +61,7 @@ class MyClient(commands.Bot):
     async def close(self):
         topgg_service = getattr(self, "topgg_service", None)
         if topgg_service is not None:
-            topgg_service.stop()
+            await topgg_service.stop()
         await super().close()
 
 

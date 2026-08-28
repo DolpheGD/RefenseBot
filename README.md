@@ -99,9 +99,11 @@ Display the highest-risk users in the server.
 
 #### Voting Integration with Top.gg
 
-Votes are detected by polling the top.gg API directly (`topgg.DBLClient`) on a
-timer - there's no inbound webhook or public port to expose, the bot checks
-and credits votes itself.
+Votes are detected by polling top.gg's v1 REST API directly (plain `aiohttp`
+calls, no wrapper library) on a timer - there's no inbound webhook or public
+port to expose, the bot checks and credits votes itself. `TOPGG_TOKEN` must be
+a v1 token from your project's "Integrations & API" settings on top.gg -
+older, webhook-era tokens are legacy/v0-only and will silently fail v1 auth.
 
 `/vote link`
 

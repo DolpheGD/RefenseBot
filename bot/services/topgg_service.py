@@ -1,38 +1,37 @@
 """
 top.gg vote integration.
 
-This used to rely on a topgg.WebhookManager listening on a locally
-exposed HTTP port, which meant the bot had to be reachable from the
-public internet (reverse proxy / port forward / tunnel) for top.gg to
-be able to POST vote events to it.
+History of this module, for context:
+  1. Originally used topgg.WebhookManager, which needed a public HTTP
+     port for top.gg to POST vote events to.
+  2. Replaced with topggpy's DBLClient, polling the old v0 REST API
+     (https://top.gg/api/bots/{id}/...). That looked like it worked (no
+     exceptions most of the time) but silently returned nothing useful:
+     top.gg has since moved to a new v1 API (https://top.gg/api/v1) with
+     a different auth scheme, and topggpy (last released in 2021) was
+     never updated for it. Votes were never actually being detected.
+  3. This version talks to the v1 API directly over aiohttp - no
+     third-party top.gg library, no webhook, no open port.
 
-Instead, this module uses topgg.DBLClient to poll the top.gg API on a
-timer and credit votes itself - no inbound webhook, no open port, no
-public URL required. The bot fully "handles itself".
+IMPORTANT: v1 requires a v1-style API token and sends it as
+"Authorization: Bearer <token>". A token generated a while ago (back
+when this bot only had a webhook secret) may be a legacy v0-only token,
+which v1 will reject. Generate/confirm a fresh token from your project's
+"Integrations & API" settings on top.gg and put it in TOPGG_TOKEN.
 
-Polling strategy (two steps, to stay well under top.gg's rate limits):
-  1. One bulk call, get_bot_votes(), which returns everyone who shows up
-     in top.gg's recent-votes log for this bot. This costs a single
-     request no matter how many members the bot has.
-  2. Only for the (usually tiny) overlap between that list and users we
-     actually track who are out of their 12h credit cooldown, we make a
-     precise per-user get_user_vote() call - this is the endpoint that
-     actually answers "did they vote in the last 12 hours", and it's
-     cheap because step 1 already filtered out everyone else.
-
-Checking every known user individually (no step 1) is what used to blow
-through top.gg's ~60-requests/minute bot rate limit and log a wall of
-404 "User not found" errors for ordinary members who've never touched
-top.gg at all.
+API reference: https://docs.top.gg/api/v1/votes
+  GET /projects/@me/votes  - cursor-paginated vote history, newest first,
+                              filtered by a required startDate on the
+                              first page.
+      -> {"cursor": "...", "data": [{"platform_id": "<discord id>",
+                                      "created_at": "...", ...}, ...]}
 """
 
-import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
-import topgg
+import aiohttp
 from discord.ext import tasks
-from topgg import errors as topgg_errors
 
 from bot.config import TOPGG_TOKEN
 from bot.database.models.user_model import UserProfile
@@ -41,22 +40,27 @@ from bot.services.update_user import add_vote
 
 logger = logging.getLogger(__name__)
 
-# How often to ask top.gg whether anyone has voted.
+# How often to ask top.gg for recent votes.
 VOTE_CHECK_INTERVAL_MINUTES = 5
 
-# How long a top.gg vote stays "active" (top.gg's own vote cooldown).
-VOTE_COOLDOWN_HOURS = 12
+# How far back to look every poll. This is just a downtime-safety margin
+# (e.g. the bot being offline for a while) - actual "is this vote new"
+# dedup is done per-user against last_voted in the database, not this
+# window, so it's safe to make this generous.
+LOOKBACK_HOURS = 48
 
-# Small delay between individual get_user_vote calls, just to avoid
-# bursting the per-bot rate limit even further.
-PER_USER_CHECK_DELAY_SECONDS = 1.0
+# Hard cap on pagination per poll, just so a bug/huge vote history can't
+# turn this into an infinite loop.
+MAX_PAGES_PER_POLL = 20
+
+TOPGG_API_BASE = "https://top.gg/api/v1"
 
 
 def _known_user_ids():
     """
     Returns {discord_id: last_voted_datetime_or_None} for every user
-    profile we've ever created. These are the only users worth polling
-    top.gg about - anyone else has never interacted with the bot.
+    profile we've ever created. Only these users are worth crediting -
+    anyone else has never interacted with the bot.
     """
     db = SessionLocal()
     try:
@@ -72,12 +76,73 @@ def _known_user_ids():
     return latest
 
 
-def _still_in_cooldown(last_voted, now):
-    if last_voted is None:
-        return False
-    if last_voted.tzinfo is None:
-        last_voted = last_voted.replace(tzinfo=timezone.utc)
-    return now - last_voted < timedelta(hours=VOTE_COOLDOWN_HOURS)
+def _parse_iso8601(value):
+    if not value:
+        return None
+    # Python's fromisoformat doesn't accept a trailing "Z" before 3.11.
+    value = value.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+class TopggV1Client:
+    """Minimal client for the parts of top.gg's v1 API this bot needs."""
+
+    def __init__(self, token: str):
+        self._token = token
+        self._session = None
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+        return self._session
+
+    async def close(self):
+        if self._session is not None and not self._session.closed:
+            await self._session.close()
+
+    async def get_recent_votes(self, start_date: datetime, max_pages: int = MAX_PAGES_PER_POLL):
+        """
+        Returns every vote entry from /projects/@me/votes with
+        created_at >= start_date, following pagination.
+        """
+        session = await self._get_session()
+        headers = {"Authorization": f"Bearer {self._token}"}
+        start_iso = start_date.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        votes = []
+        cursor = None
+
+        for _ in range(max_pages):
+            params = {"startDate": start_iso}
+            if cursor:
+                params["cursor"] = cursor
+
+            async with session.get(
+                f"{TOPGG_API_BASE}/projects/@me/votes",
+                headers=headers,
+                params=params,
+            ) as resp:
+                if resp.status != 200:
+                    text = await resp.text()
+                    raise RuntimeError(
+                        f"top.gg API returned {resp.status} for /projects/@me/votes: {text}"
+                    )
+                payload = await resp.json()
+
+            page = payload.get("data") or []
+            votes.extend(page)
+
+            cursor = payload.get("cursor")
+            if not cursor or not page:
+                break
+
+        return votes
 
 
 class TopggService:
@@ -88,10 +153,7 @@ class TopggService:
 
     def __init__(self, bot):
         self.bot = bot
-        self.client = topgg.DBLClient(bot, TOPGG_TOKEN)
-        # Keep a handle on the bot so other cogs/services can reach the
-        # top.gg client directly if needed (e.g. bot.topgg_client.get_bot_info()).
-        self.bot.topgg_client = self.client
+        self.client = TopggV1Client(TOPGG_TOKEN)
 
     def start(self):
         if not TOPGG_TOKEN:
@@ -100,55 +162,52 @@ class TopggService:
         if not self.check_votes.is_running():
             self.check_votes.start()
 
-    def stop(self):
+    async def stop(self):
         if self.check_votes.is_running():
             self.check_votes.cancel()
+        await self.client.close()
 
     @tasks.loop(minutes=VOTE_CHECK_INTERVAL_MINUTES)
     async def check_votes(self):
-        # Step 1: one cheap bulk call to find out who's voted recently at all.
+        start_date = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
+
         try:
-            recent_voters = await self.client.get_bot_votes()
-        except topgg_errors.HTTPException as exc:
-            print(f"top.gg get_bot_votes failed, will retry next cycle: {exc}")
-            return
+            votes = await self.client.get_recent_votes(start_date)
         except Exception as exc:
-            print(f"top.gg get_bot_votes failed, will retry next cycle: {exc}")
+            print(f"top.gg vote poll failed, will retry next cycle: {exc}")
             return
 
-        recent_voter_ids = {str(voter["id"]) for voter in recent_voters}
-        if not recent_voter_ids:
+        if not votes:
             return
+
+        # Collapse to the most recent vote timestamp per Discord user id.
+        latest_vote_at = {}
+        for entry in votes:
+            discord_id = entry.get("platform_id")
+            voted_at = _parse_iso8601(entry.get("created_at"))
+            if not discord_id or voted_at is None:
+                continue
+            discord_id = str(discord_id)
+            if discord_id not in latest_vote_at or voted_at > latest_vote_at[discord_id]:
+                latest_vote_at[discord_id] = voted_at
 
         known_users = _known_user_ids()
-        now = datetime.now(timezone.utc)
 
-        # Only bother with users we actually track, who showed up in the
-        # recent-votes list, and who aren't already credited for this
-        # 12h window.
-        candidates = [
-            discord_id
-            for discord_id in recent_voter_ids
-            if discord_id in known_users
-            and not _still_in_cooldown(known_users[discord_id], now)
-        ]
-
-        for discord_id in candidates:
-            try:
-                has_voted = await self.client.get_user_vote(int(discord_id))
-            except topgg_errors.NotFound:
-                # No top.gg vote record for this user (shouldn't normally
-                # happen since they were just in the recent-votes list).
-                continue
-            except Exception as exc:
-                print(f"top.gg vote check failed for user {discord_id}: {exc}")
+        for discord_id, voted_at in latest_vote_at.items():
+            if discord_id not in known_users:
+                # top.gg voter we've never seen chat/interact in a server we track.
                 continue
 
-            if has_voted:
-                await add_vote(discord_id)
-                print(f"Vote credited for user {discord_id} (via top.gg poll)")
+            last_voted = known_users[discord_id]
+            if last_voted is not None:
+                if last_voted.tzinfo is None:
+                    last_voted = last_voted.replace(tzinfo=timezone.utc)
+                if voted_at <= last_voted:
+                    # Already credited for this vote (or a newer one).
+                    continue
 
-            await asyncio.sleep(PER_USER_CHECK_DELAY_SECONDS)
+            await add_vote(discord_id)
+            print(f"Vote credited for user {discord_id} (voted at {voted_at.isoformat()})")
 
     @check_votes.before_loop
     async def _before_check_votes(self):
