@@ -119,9 +119,9 @@ class TopggV1Client:
         cursor = None
 
         for _ in range(max_pages):
-            params = {"startDate": start_iso}
-            if cursor:
-                params["cursor"] = cursor
+            # cursor and startDate are mutually exclusive on this endpoint -
+            # only the very first request (no cursor yet) may send startDate.
+            params = {"cursor": cursor} if cursor else {"startDate": start_iso}
 
             async with session.get(
                 f"{TOPGG_API_BASE}/projects/@me/votes",
@@ -169,6 +169,16 @@ class TopggService:
 
     @tasks.loop(minutes=VOTE_CHECK_INTERVAL_MINUTES)
     async def check_votes(self):
+        # discord.ext.tasks silently stops a loop forever (no auto-restart)
+        # the moment its coroutine raises anything uncaught, so the whole
+        # body is wrapped defensively - one bad cycle (a flaky API response,
+        # a transient DB error) should never permanently kill vote crediting.
+        try:
+            await self._check_votes_once()
+        except Exception as exc:
+            print(f"top.gg vote check failed unexpectedly, will retry next cycle: {exc}")
+
+    async def _check_votes_once(self):
         start_date = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
 
         try:
@@ -206,8 +216,12 @@ class TopggService:
                     # Already credited for this vote (or a newer one).
                     continue
 
-            await add_vote(discord_id)
-            print(f"Vote credited for user {discord_id} (voted at {voted_at.isoformat()})")
+            try:
+                await add_vote(discord_id)
+                print(f"Vote credited for user {discord_id} (voted at {voted_at.isoformat()})")
+            except Exception as exc:
+                # Don't let one bad row block crediting everyone else this cycle.
+                print(f"Failed to credit vote for user {discord_id}: {exc}")
 
     @check_votes.before_loop
     async def _before_check_votes(self):

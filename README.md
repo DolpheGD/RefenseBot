@@ -181,7 +181,7 @@ Each user keeps only their highest-risk messages for efficient behavioral modeli
 * SQLite
 * Hugging Face Transformers
 * PyTorch
-* topggpy
+* aiohttp (direct top.gg v1 API polling)
 
 ---
 
