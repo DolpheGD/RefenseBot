@@ -1,0 +1,22 @@
+[Unit]
+Description=RefenseBot Discord Bot
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/RefenseBot
+# Use an environment file for secrets and runtime flags
+EnvironmentFile=/etc/refensebot.env
+# Run the bot using the system Python3 interpreter; adjust path if different
+ExecStart=/usr/bin/python3 start_bot.py
+Restart=always
+RestartSec=5
+KillMode=process
+TimeoutStopSec=20
+# Make sure file descriptors and processes are limited reasonably
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target
