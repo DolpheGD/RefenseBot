@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from bot.config import BOT_KEY, SERVER_ID, DEV_MODE
 from bot.utils.sync_bans import sync_bans
 from bot.utils.check_files import check_files
+from bot.utils.memory_guard import start_memory_watchdog
 from bot.services.topgg_service import setup_topgg
 
 load_dotenv()
@@ -66,7 +67,8 @@ class MyClient(commands.Bot):
 
 
 def run_bot():
-    #check required files
+    # check required files
     check_files()
+    start_memory_watchdog()
     bot = MyClient()
     bot.run(BOT_KEY)
