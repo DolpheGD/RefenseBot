@@ -101,8 +101,9 @@ def _load_local_models() -> None:
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
     import torch as _torch_local
 
-    _tokenizer = AutoTokenizer.from_pretrained("KoalaAI/Text-Moderation", use_auth_token=HF_TOKEN)
-    _model = AutoModelForSequenceClassification.from_pretrained("KoalaAI/Text-Moderation", use_auth_token=HF_TOKEN)
+    pretrained_kwargs = {"token": HF_TOKEN} if HF_TOKEN else {}
+    _tokenizer = AutoTokenizer.from_pretrained("KoalaAI/Text-Moderation", **pretrained_kwargs)
+    _model = AutoModelForSequenceClassification.from_pretrained("KoalaAI/Text-Moderation", **pretrained_kwargs)
     _torch = _torch_local
 
 
