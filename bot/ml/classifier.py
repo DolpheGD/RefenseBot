@@ -40,8 +40,26 @@ def _local_model_available() -> bool:
     return _tokenizer is not None and _model is not None and _torch is not None
 
 
+def _ensure_local_model_loaded() -> bool:
+    """Attempt to load the local model when the host is configured to prefer it."""
+    if not USE_LOCAL_ML:
+        return False
+
+    if _local_model_available():
+        return True
+
+    try:
+        _load_local_models()
+        return _local_model_available()
+    except Exception:
+        return False
+
+
 def get_remote_model_status() -> Dict[str, Any]:
     """Return the current remote moderation state for monitoring and admin checks."""
+    if USE_LOCAL_ML:
+        _ensure_local_model_loaded()
+
     return {
         "token_configured": bool(HF_TOKEN),
         "local_available": _local_model_available(),
@@ -163,8 +181,15 @@ async def classify_danger_level(message: str, image: bool = False) -> Dict[str, 
     local_ready = _local_model_available()
     remote_blocked = _REMOTE_USAGE_BLOCKED
 
-    if USE_LOCAL_ML and local_ready:
-        results = await asyncio.to_thread(_classify_general_local, message)
+    if USE_LOCAL_ML:
+        if not local_ready:
+            local_ready = _ensure_local_model_loaded()
+        if local_ready:
+            results = await asyncio.to_thread(_classify_general_local, message)
+        elif HF_TOKEN and not remote_blocked:
+            results = await asyncio.to_thread(_classify_general_remote, message)
+        else:
+            return {"Hate": 0.0, "Sexual": 0.0, "Concern": 0.0, "Danger": 0.0, "Scam": 0.0}
     elif local_ready and (remote_blocked or not HF_TOKEN):
         results = await asyncio.to_thread(_classify_general_local, message)
     elif HF_TOKEN and not remote_blocked:
