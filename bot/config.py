@@ -17,5 +17,7 @@ DISCORD_MAX_MESSAGE_CACHE = int(os.getenv("DISCORD_MAX_MESSAGE_CACHE", "2000"))
 DISCORD_CHUNK_GUILDS_AT_STARTUP = os.getenv("DISCORD_CHUNK_GUILDS_AT_STARTUP", "False") == "True"
 # Graceful memory watchdog: if Python RSS exceeds this threshold (MB) the bot
 # exits cleanly so a supervisor / systemd can restart it before Linux OOM-kills it.
-BOT_MEMORY_LIMIT_MB = int(os.getenv("BOT_MEMORY_LIMIT_MB", "512"))
+# 512MB is too aggressive for a CPU-heavy moderation bot; 1024MB is a safer default
+# for Raspberry Pi / small Linux hosts that load local models or OCR dependencies.
+BOT_MEMORY_LIMIT_MB = int(os.getenv("BOT_MEMORY_LIMIT_MB", "1024"))
 BOT_MEMORY_CHECK_SECONDS = int(os.getenv("BOT_MEMORY_CHECK_SECONDS", "60"))

@@ -54,6 +54,13 @@ HF_TOKEN=
 # webhook-era "legacy" tokens will NOT work here) - used to poll top.gg
 # for votes directly, no public server or webhook needed.
 TOPGG_TOKEN=
+
+# Local model toggle: set to True only on hosts with enough RAM to load the
+# moderation model locally. False keeps the bot on the remote Hugging Face API.
+USE_LOCAL_ML=False
+
+# Safety shutdown threshold in MB for the in-process memory watchdog.
+BOT_MEMORY_LIMIT_MB=1024
 """
 
 
