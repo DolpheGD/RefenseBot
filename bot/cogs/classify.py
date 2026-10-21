@@ -78,11 +78,14 @@ class Classify(commands.GroupCog, name="classify"):
     async def model_status(self, ctx: discord.Interaction):
         status = get_remote_model_status()
         remote_state = "blocked" if status["remote_blocked"] else "available"
+        local_state = "online" if status["local_available"] else "offline"
+        local_error = status.get("local_error") or "none"
         message = (
-            f"Local model: {'online' if status['local_available'] else 'offline'}\n"
+            f"Local model: {local_state}\n"
+            f"Local error: {local_error}\n"
             f"Remote model: {remote_state}\n"
             f"HF token configured: {'yes' if status['token_configured'] else 'no'}\n"
-            f"Reason: {status['remote_reason']}"
+            f"Remote reason: {status['remote_reason']}"
         )
         await ctx.response.send_message(message, ephemeral=True)
 

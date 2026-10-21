@@ -32,6 +32,7 @@ _model = None
 _torch = None
 _REMOTE_USAGE_BLOCKED = False
 _REMOTE_USAGE_BLOCK_REASON = ""
+_LOCAL_MODEL_ERROR = ""
 
 HF_HEADERS = {"Authorization": f"Bearer {HF_TOKEN}"} if HF_TOKEN else {}
 
@@ -42,16 +43,20 @@ def _local_model_available() -> bool:
 
 def _ensure_local_model_loaded() -> bool:
     """Attempt to load the local model when the host is configured to prefer it."""
+    global _LOCAL_MODEL_ERROR
     if not USE_LOCAL_ML:
         return False
 
     if _local_model_available():
+        _LOCAL_MODEL_ERROR = ""
         return True
 
     try:
         _load_local_models()
+        _LOCAL_MODEL_ERROR = ""
         return _local_model_available()
-    except Exception:
+    except Exception as exc:  # pragma: no cover - runtime-only diagnostics
+        _LOCAL_MODEL_ERROR = f"{type(exc).__name__}: {exc}"
         return False
 
 
@@ -63,6 +68,7 @@ def get_remote_model_status() -> Dict[str, Any]:
     return {
         "token_configured": bool(HF_TOKEN),
         "local_available": _local_model_available(),
+        "local_error": _LOCAL_MODEL_ERROR,
         "remote_blocked": _REMOTE_USAGE_BLOCKED,
         "remote_reason": _REMOTE_USAGE_BLOCK_REASON or "normal",
         "mode": "local-first" if USE_LOCAL_ML else "remote-first",
