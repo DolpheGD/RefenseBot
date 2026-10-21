@@ -2,6 +2,7 @@ import discord
 
 from discord.ext import commands
 from discord import app_commands
+from bot.ml.classifier import get_remote_model_status
 from bot.utils.guild_decorator import guild_decorator
 from bot.utils.embedder import classify_user_with_output, classify_with_output
 
@@ -70,7 +71,20 @@ class Classify(commands.GroupCog, name="classify"):
             user = ctx.user
         await ctx.response.send_message(embed=await classify_user_with_output(user, verbose))
 
-
+    @app_commands.command(
+        name = "status",
+        description = "Shows whether the moderation models are usable"
+    )
+    async def model_status(self, ctx: discord.Interaction):
+        status = get_remote_model_status()
+        remote_state = "blocked" if status["remote_blocked"] else "available"
+        message = (
+            f"Local model: {'online' if status['local_available'] else 'offline'}\n"
+            f"Remote model: {remote_state}\n"
+            f"HF token configured: {'yes' if status['token_configured'] else 'no'}\n"
+            f"Reason: {status['remote_reason']}"
+        )
+        await ctx.response.send_message(message, ephemeral=True)
 
 
 async def setup(bot):

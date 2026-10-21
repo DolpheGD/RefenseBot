@@ -1,13 +1,13 @@
-# Classifies text using either local Hugging Face transformers models (heavy) or the
-# remote Hugging Face Inference API (lightweight, network calls). Local models are
-# loaded lazily on first use to avoid high RAM at import time. Prefer remote inference
-# on memory-constrained hosts (set USE_LOCAL_ML=False in environment).
+# Classifies text using a local moderation model and a network backup model.
+# The local model is used when available, and the remote Hugging Face endpoint is
+# used as a fallback. If the remote API hits its usage limit, new messages are
+# blocked until the failure is resolved unless a local model is available.
 
-import math
-import os
 import asyncio
+import math
+from typing import Any, Dict
+
 import requests
-from typing import Dict, Any
 
 from bot.config import HF_TOKEN, USE_LOCAL_ML
 from bot.helpers.scam_identifier import identify_scam
@@ -29,27 +29,56 @@ CLASS_TERMS = {
 # Globals for lazy-loaded local models
 _tokenizer = None
 _model = None
-_toxic_pipeline = None
 _torch = None
+_REMOTE_USAGE_BLOCKED = False
+_REMOTE_USAGE_BLOCK_REASON = ""
 
 HF_HEADERS = {"Authorization": f"Bearer {HF_TOKEN}"} if HF_TOKEN else {}
 
 
+def _local_model_available() -> bool:
+    return _tokenizer is not None and _model is not None and _torch is not None
+
+
+def get_remote_model_status() -> Dict[str, Any]:
+    """Return the current remote moderation state for monitoring and admin checks."""
+    return {
+        "token_configured": bool(HF_TOKEN),
+        "local_available": _local_model_available(),
+        "remote_blocked": _REMOTE_USAGE_BLOCKED,
+        "remote_reason": _REMOTE_USAGE_BLOCK_REASON or "normal",
+        "mode": "local-first" if USE_LOCAL_ML else "remote-first",
+    }
+
+
+def _block_remote_usage(reason: str) -> None:
+    global _REMOTE_USAGE_BLOCKED, _REMOTE_USAGE_BLOCK_REASON
+    _REMOTE_USAGE_BLOCKED = True
+    _REMOTE_USAGE_BLOCK_REASON = reason
+
+
+def _clear_remote_usage_block() -> None:
+    global _REMOTE_USAGE_BLOCKED, _REMOTE_USAGE_BLOCK_REASON
+    _REMOTE_USAGE_BLOCKED = False
+    _REMOTE_USAGE_BLOCK_REASON = ""
+
+
 def _load_local_models() -> None:
-    """Load transformers / torch models into global variables. This is blocking and
-    should only be called on hosts that have enough RAM and CPU.
+    """Load the moderation model only when needed.
+
+    Keeping this to a single model keeps RAM usage substantially lower on
+    8 GB devices while preserving the core moderation signals.
     """
-    global _tokenizer, _model, _toxic_pipeline, _torch
-    if _tokenizer is not None and _model is not None and _toxic_pipeline is not None:
+    global _tokenizer, _model, _torch
+    if _tokenizer is not None and _model is not None:
         return
 
     # Import heavy libraries only when needed
-    from transformers import AutoModelForSequenceClassification, AutoTokenizer, pipeline
+    from transformers import AutoModelForSequenceClassification, AutoTokenizer
     import torch as _torch_local
 
     _tokenizer = AutoTokenizer.from_pretrained("KoalaAI/Text-Moderation", use_auth_token=HF_TOKEN)
     _model = AutoModelForSequenceClassification.from_pretrained("KoalaAI/Text-Moderation", use_auth_token=HF_TOKEN)
-    _toxic_pipeline = pipeline("text-classification", model="unitary/toxic-bert", use_auth_token=HF_TOKEN)
     _torch = _torch_local
 
 
@@ -67,39 +96,32 @@ def _classify_general_local(text: str) -> Dict[str, float]:
     id2label = _model.config.id2label
     results = {id2label[idx]: float(probabilities[idx].item()) for idx in range(len(probabilities))}
 
-    # Ensure all expected keys exist with default 0.0
     for k in CLASS_TERMS.keys():
         results.setdefault(k, 0.0)
 
     return dict(sorted(results.items(), key=lambda item: item[1], reverse=True))
 
 
-def _classify_toxicity_local(message: str) -> float:
-    global _toxic_pipeline
-    if _toxic_pipeline is None:
-        _load_local_models()
-
-    out = _toxic_pipeline(message)
-    if isinstance(out, list) and len(out) > 0:
-        # pipeline usually returns list of dicts
-        return float(out[0].get("score", 0.0))
-    return 0.0
-
-
 def _classify_general_remote(text: str) -> Dict[str, float]:
-    """Use Hugging Face Inference API for the moderation model. Best-effort mapping of labels."""
+    """Use the remote Hugging Face moderation model when available."""
     if not HF_TOKEN:
-        # No token available; return safe defaults
+        _block_remote_usage("HF_TOKEN missing")
+        return {k: 0.0 for k in CLASS_TERMS}
+
+    if _REMOTE_USAGE_BLOCKED:
         return {k: 0.0 for k in CLASS_TERMS}
 
     url = "https://api-inference.huggingface.co/models/KoalaAI/Text-Moderation"
     try:
         resp = requests.post(url, headers=HF_HEADERS, json={"inputs": text}, timeout=30)
+        if resp.status_code in {401, 403, 429, 500, 502, 503, 504}:
+            _block_remote_usage(f"HTTP {resp.status_code}")
+            return {k: 0.0 for k in CLASS_TERMS}
+
         resp.raise_for_status()
         data = resp.json()
         results = {}
 
-        # Response might be a list of {label,score} items
         if isinstance(data, list):
             for item in data:
                 label = item.get("label")
@@ -107,69 +129,54 @@ def _classify_general_remote(text: str) -> Dict[str, float]:
                 if label:
                     results[label] = score
         elif isinstance(data, dict):
-            # Some models return {label: score} or nested structure
-            # Attempt to flatten
             if "labels" in data and "scores" in data:
                 for label, score in zip(data["labels"], data["scores"]):
                     results[label] = float(score)
-            else:
-                # Unknown format - fallback
-                pass
 
-        # Ensure all expected keys exist
         for k in CLASS_TERMS.keys():
             results.setdefault(k, 0.0)
 
+        _clear_remote_usage_block()
         return dict(sorted(results.items(), key=lambda item: item[1], reverse=True))
-    except Exception:
-        # On any failure, return safe defaults to avoid crashing the bot
+    except Exception as exc:
+        message = str(exc).lower()
+        if "429" in message or "rate limit" in message or "quota" in message or "too many requests" in message:
+            _block_remote_usage("HF usage limit hit")
+        elif "403" in message or "401" in message:
+            _block_remote_usage("HF auth rejected")
+        else:
+            _block_remote_usage(f"remote inference failure: {type(exc).__name__}")
         return {k: 0.0 for k in CLASS_TERMS}
-
-
-def _classify_toxicity_remote(message: str) -> float:
-    if not HF_TOKEN:
-        return 0.0
-    url = "https://api-inference.huggingface.co/models/unitary/toxic-bert"
-    try:
-        resp = requests.post(url, headers=HF_HEADERS, json={"inputs": message}, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-        if isinstance(data, list) and len(data) > 0:
-            # Try to find a 'toxic' label
-            for item in data:
-                label = item.get("label", "").lower()
-                score = float(item.get("score", 0.0))
-                if "toxic" in label or "tox" in label:
-                    return score
-            # no explicit toxic label; return top score
-            return float(data[0].get("score", 0.0))
-        return 0.0
-    except Exception:
-        return 0.0
 
 
 async def classify_danger_level(message: str, image: bool = False) -> Dict[str, float]:
     """Compute danger-related scores for a message.
 
-    This function intentionally avoids importing heavy ML libraries at import time.
-    On memory-constrained hosts set USE_LOCAL_ML=False and ensure HF_TOKEN is set so
-    remote inference is used instead.
+    Local moderation is preferred when it is already loaded. Remote moderation is a
+    network fallback. If the remote API is blocked by a usage limit and no local
+    model is available, message analysis is skipped to avoid sending unsupported
+    requests to the network model.
     """
     if (not message or message.strip() == "") and not image:
         return {"Hate": 0.0, "Sexual": 0.0, "Concern": 0.0, "Danger": 0.0, "Scam": 0.0}
 
-    # Choose remote or local classification; run blocking work in thread to not block the event loop
-    if USE_LOCAL_ML:
+    local_ready = _local_model_available()
+    remote_blocked = _REMOTE_USAGE_BLOCKED
+
+    if USE_LOCAL_ML and local_ready:
         results = await asyncio.to_thread(_classify_general_local, message)
-        toxicity_score = await asyncio.to_thread(_classify_toxicity_local, message)
-    else:
+    elif local_ready and (remote_blocked or not HF_TOKEN):
+        results = await asyncio.to_thread(_classify_general_local, message)
+    elif HF_TOKEN and not remote_blocked:
         results = await asyncio.to_thread(_classify_general_remote, message)
-        toxicity_score = await asyncio.to_thread(_classify_toxicity_remote, message)
+    elif local_ready:
+        results = await asyncio.to_thread(_classify_general_local, message)
+    else:
+        return {"Hate": 0.0, "Sexual": 0.0, "Concern": 0.0, "Danger": 0.0, "Scam": 0.0}
 
     slurs = identify_slurs(message)
     scam_score = identify_scam(message)
 
-    # Be defensive about missing keys
     def get_score(k: str) -> float:
         return float(results.get(k, 0.0))
 
@@ -181,12 +188,11 @@ async def classify_danger_level(message: str, image: bool = False) -> Dict[str, 
         + get_score("V") * 0.20
         + get_score("H2") * 0.35
         + get_score("V2") * 0.30
-        + toxicity_score * 0.3
         + slurs.get("count", 0) * 0.5,
         1.0,
     )
 
-    concern = min(get_score("SH") * 1.5 + (toxicity_score * 0.1), 1.0)
+    concern = min(get_score("SH") * 1.5, 1.0)
     scam = min(scam_score, 1.0)
 
     danger = sexual * 0.45 + hate * 0.55 + concern * 0.25 + scam * 0.25

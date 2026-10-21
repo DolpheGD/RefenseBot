@@ -2,7 +2,14 @@ import os
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
-from bot.config import BOT_KEY, SERVER_ID, DEV_MODE
+from bot.config import (
+    BOT_KEY,
+    SERVER_ID,
+    DEV_MODE,
+    LOW_RAM_MODE,
+    DISCORD_MAX_MESSAGE_CACHE,
+    DISCORD_CHUNK_GUILDS_AT_STARTUP,
+)
 from bot.utils.sync_bans import sync_bans
 from bot.utils.check_files import check_files
 from bot.utils.memory_guard import start_memory_watchdog
@@ -13,10 +20,21 @@ load_dotenv()
 # basic bot client setup, including command prefix and intents
 class MyClient(commands.Bot):
     def __init__(self):
-        intents = discord.Intents.default()
+        intents = discord.Intents.none()
+        intents.guilds = True
+        intents.messages = True
         intents.message_content = True
-        
-        super().__init__(command_prefix='/', intents=intents)
+
+        if not LOW_RAM_MODE:
+            intents = discord.Intents.default()
+            intents.message_content = True
+
+        super().__init__(
+            command_prefix='/',
+            intents=intents,
+            max_messages=DISCORD_MAX_MESSAGE_CACHE,
+            chunk_guilds_at_startup=DISCORD_CHUNK_GUILDS_AT_STARTUP,
+        )
 
 
     async def setup_hook(self):

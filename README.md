@@ -51,10 +51,9 @@ This preserves important signals and prevents dangerous behavior from being dilu
 
 ### AI-Powered Text Moderation
 
-Uses multiple machine learning models to classify message content:
+Uses a lightweight moderation pipeline to classify message content:
 
 * KoalaAI moderation model
-* Toxic-BERT ensemble scoring
 * FalconsAI NSFW scoring
 * EasyOCR for image text extraction
 
