@@ -1,9 +1,13 @@
+import logging
+
 import discord
 from sqlalchemy import select
 
 from bot.database.session import SessionLocal
 from bot.database.models.user_model import UserProfile
 from bot.services.update_user import get_or_create_guild, get_or_create_user
+
+logger = logging.getLogger("refensebot.users")
 
 async def get_top_ten_and_avg(discord_id: int, guild: discord.Guild):
     """
@@ -133,7 +137,7 @@ async def set_vote_allow(guild: discord.Guild, setting: bool):
     try:
         user_guild = await get_or_create_guild(db, guild)
         user_guild.allow_votes = setting
-        print(f'setting {user_guild.name} to {setting}')
+        logger.info('Setting %s to %s', user_guild.name, setting)
         db.commit()
         
     finally:

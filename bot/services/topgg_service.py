@@ -157,7 +157,7 @@ class TopggService:
 
     def start(self):
         if not TOPGG_TOKEN:
-            print("TOPGG_TOKEN is not set - skipping top.gg vote polling.")
+            logger.warning("TOPGG_TOKEN is not set - skipping top.gg vote polling.")
             return
         if not self.check_votes.is_running():
             self.check_votes.start()
@@ -176,7 +176,7 @@ class TopggService:
         try:
             await self._check_votes_once()
         except Exception as exc:
-            print(f"top.gg vote check failed unexpectedly, will retry next cycle: {exc}")
+            logger.exception("top.gg vote check failed unexpectedly, will retry next cycle: %s", exc)
 
     async def _check_votes_once(self):
         start_date = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
@@ -184,7 +184,7 @@ class TopggService:
         try:
             votes = await self.client.get_recent_votes(start_date)
         except Exception as exc:
-            print(f"top.gg vote poll failed, will retry next cycle: {exc}")
+            logger.exception("top.gg vote poll failed, will retry next cycle: %s", exc)
             return
 
         if not votes:
@@ -218,10 +218,10 @@ class TopggService:
 
             try:
                 await add_vote(discord_id)
-                print(f"Vote credited for user {discord_id} (voted at {voted_at.isoformat()})")
+                logger.info("Vote credited for user %s (voted at %s)", discord_id, voted_at.isoformat())
             except Exception as exc:
                 # Don't let one bad row block crediting everyone else this cycle.
-                print(f"Failed to credit vote for user {discord_id}: {exc}")
+                logger.exception("Failed to credit vote for user %s: %s", discord_id, exc)
 
     @check_votes.before_loop
     async def _before_check_votes(self):

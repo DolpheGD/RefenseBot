@@ -1,10 +1,14 @@
 # listeners to update data
 
+import logging
+
 import discord
 from discord.ext import commands
 from bot.services.get_users import set_user_banned
 from bot.services.update_user import update_user
 from bot.utils.guild_decorator import guild_decorator 
+
+logger = logging.getLogger("refensebot.listeners")
 
 class Listeners(commands.Cog):
     def __init__(self, bot):
@@ -34,10 +38,10 @@ class Listeners(commands.Cog):
                 return
             
         if len(content) <= 0 and len(attachments) <= 0:
-            print('Message with no text or attachments detected. Skipping processing.')
+            logger.info('Message with no text or attachments detected. Skipping processing.')
             return
         else:
-            print(f'Message Processing "{content}" with {len(attachments)} attachments.')
+            logger.info('Message Processing "%s" with %s attachments.', content, len(attachments))
         
             
         user_id = str(message.author.id)
@@ -52,7 +56,11 @@ class Listeners(commands.Cog):
         else:
             avatar_url = ""        
 
-        await update_user(user_id, message_id, content, message_time, username, display_name, avatar_url, messsage_guild, attachments)
+        try:
+            await update_user(user_id, message_id, content, message_time, username, display_name, avatar_url, messsage_guild, attachments)
+        except Exception:
+            logger.exception("Failed to process message %s from %s", message_id, user_id)
+            raise
         
         
     @guild_decorator

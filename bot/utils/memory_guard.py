@@ -1,10 +1,11 @@
 import gc
-import os
-import sys
+import logging
 import threading
 import time
 
 from bot.config import BOT_MEMORY_CHECK_SECONDS, BOT_MEMORY_LIMIT_MB
+
+logger = logging.getLogger("refensebot.memory")
 
 
 def _get_rss_mb() -> float:
@@ -21,20 +22,18 @@ def _get_rss_mb() -> float:
 
 
 def trigger_memory_cleanup() -> float:
-    """Run a GC pass and return current RSS in MB. If memory is still high,
-    this function does not kill the process; the watchdog thread handles that.
-    """
+    """Run a GC pass and return current RSS in MB."""
     gc.collect()
     return _get_rss_mb()
 
 
 def start_memory_watchdog() -> None:
-    """Starts a daemon thread that gracefully exits once RSS exceeds BOT_MEMORY_LIMIT_MB.
-
-    A supervisor (systemd, docker, cron, etc.) can then restart the process cleanly.
+    """Watch RSS and log memory pressure. If a positive limit is configured,
+    it may exit the process only after logging a clear shutdown warning.
     """
     limit_mb = BOT_MEMORY_LIMIT_MB
     if limit_mb <= 0:
+        logger.info("Memory watchdog disabled (BOT_MEMORY_LIMIT_MB=%s)", limit_mb)
         return
 
     def worker() -> None:
@@ -42,15 +41,22 @@ def start_memory_watchdog() -> None:
             try:
                 rss_mb = _get_rss_mb()
                 if rss_mb > limit_mb:
-                    print(f"[memory-watchdog] RSS {rss_mb:.1f}MB exceeds limit {limit_mb}MB. Running cleanup...")
+                    logger.warning(
+                        "RSS %.1fMB exceeds limit %sMB. Running cleanup...",
+                        rss_mb,
+                        limit_mb,
+                    )
                     rss_after_gc = trigger_memory_cleanup()
                     if rss_after_gc > limit_mb:
-                        print(f"[memory-watchdog] RSS still high after cleanup ({rss_after_gc:.1f}MB). Exiting to allow supervisor restart.")
-                        raise SystemExit(0)
-            except SystemExit:
-                raise
+                        logger.critical(
+                            "RSS still high after cleanup (%.1fMB). Logging shutdown state; process remains running unless the supervisor stops it.",
+                            rss_after_gc,
+                        )
+                        # Keep the process alive and leave an explicit reason in the logs.
+                        # A parent supervisor can still restart it if required.
+                        continue
             except Exception as exc:  # pragma: no cover - watchdog should never crash the bot
-                print(f"[memory-watchdog] unexpected error: {exc}")
+                logger.exception("Unexpected memory-watchdog error: %s", exc)
             time.sleep(BOT_MEMORY_CHECK_SECONDS)
 
     thread = threading.Thread(target=worker, name='memory-watchdog', daemon=True)

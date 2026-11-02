@@ -10,6 +10,7 @@ from bot.config import (
     DISCORD_MAX_MESSAGE_CACHE,
     DISCORD_CHUNK_GUILDS_AT_STARTUP,
 )
+from bot.logging_setup import configure_logging
 from bot.utils.sync_bans import sync_bans
 from bot.utils.check_files import check_files
 from bot.utils.memory_guard import start_memory_watchdog
@@ -85,6 +86,7 @@ class MyClient(commands.Bot):
 
 
 def run_bot():
+    configure_logging()
     # check required files
     check_files()
     start_memory_watchdog()

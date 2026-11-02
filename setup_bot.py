@@ -60,7 +60,8 @@ TOPGG_TOKEN=
 USE_LOCAL_ML=False
 
 # Safety shutdown threshold in MB for the in-process memory watchdog.
-BOT_MEMORY_LIMIT_MB=1024
+# Set to 0 to disable the watchdog and keep the bot running while it logs memory pressure.
+BOT_MEMORY_LIMIT_MB=0
 """
 
 
