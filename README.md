@@ -130,6 +130,24 @@ Display information for all the commands to the user
 
 ---
 
+## Standalone Roll Game
+
+`/roll`
+
+Rolls an integer from 0 to 1,000,000 and awards rarity-weighted points for
+number patterns (pairs, runs, repetitions, and digit sequences), mathematical
+properties (primes, squares, Fibonacci, Armstrong, and Kaprekar numbers), and
+special values. Two- through six-digit rolls can earn length-scaled
+non-repeating, ascending, descending, consecutive, hill, and valley badges.
+Single-digit rolls earn large bonuses, with especially high awards for 0 and 1.
+The total determines a Common-to-Impossible rarity label.
+
+The game is isolated in `bot/cogs/roll.py` and `bot/roll_game.py`. It does not
+read or write the moderation database or save roll results. Remove those two
+files and `tests/roll_game_test.py` to remove the feature.
+
+---
+
 ## Architecture
 
 Refender is structured for scalability:
@@ -202,4 +220,3 @@ AI moderation is imperfect.
 
 Refender is designed to assist moderators, not replace them.
 Context, intent, and human judgment remain critical.
-
