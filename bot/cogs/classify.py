@@ -47,7 +47,15 @@ class Classify(commands.GroupCog, name="classify"):
             message = await ctx.channel.fetch_message(message_id)
             content = message.content
             attachments = message.attachments
-            await ctx.followup.send(embed=await classify_with_output(content, message_id, attachments))
+            embed = await classify_with_output(content, message_id, attachments)
+            if message.attachments:
+                image_url = next(
+                    (attachment.url for attachment in message.attachments if attachment.content_type and attachment.content_type.startswith("image/")),
+                    None,
+                )
+                if image_url:
+                    embed.description = f"{embed.description}\nImage URL: {image_url}"
+            await ctx.followup.send(embed=embed)
         except discord.NotFound:
             await ctx.followup.send("Message not found.", ephemeral=True)
         except discord.Forbidden:

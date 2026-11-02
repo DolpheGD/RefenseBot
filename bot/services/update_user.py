@@ -10,17 +10,18 @@ async def get_or_create_user(db, discord_id: str, message_guild: discord.Guild):
     """
     gets or creates a user profile for the given discord_id and guild
     """
+    guild = await get_or_create_guild(db, message_guild)
     user = (
         db.query(UserProfile)
         .filter_by(
-            guild_id=message_guild.id,
+            guild_id=guild.id,
             discord_id=str(discord_id)
         )
         .first()
     )
 
     if user is None:
-        user = UserProfile(discord_id=discord_id, guild_id=message_guild.id)
+        user = UserProfile(discord_id=discord_id, guild_id=guild.id)
         db.add(user)
         db.commit()
         db.refresh(user)
@@ -115,6 +116,75 @@ async def spend_vote(discord_id: str, guild: discord.Guild):
 
 
 
+def get_image_url_from_attachments(attachments: list[discord.Attachment]) -> str:
+    image_urls = [
+        attachment.url
+        for attachment in attachments
+        if attachment.content_type and attachment.content_type.startswith("image/")
+    ]
+    return "; ".join(image_urls)
+
+
+async def get_message_attachment_url(guild: discord.Guild, message_id: str):
+    for channel in guild.channels:
+        if not hasattr(channel, "fetch_message"):
+            continue
+        try:
+            message = await channel.fetch_message(str(message_id))
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            continue
+
+        for attachment in message.attachments:
+            if attachment.content_type and attachment.content_type.startswith("image/"):
+                return attachment.url
+        for embed in message.embeds:
+            if embed.image and embed.image.url:
+                return embed.image.url
+    return ""
+
+
+async def recalibrate_server_image_urls(guild: discord.Guild, discord_id: str | None = None):
+    db = SessionLocal()
+    try:
+        guild_db = await get_or_create_guild(db, guild)
+        query = db.query(UserProfile).filter_by(guild_id=guild_db.id)
+        if discord_id is not None:
+            query = query.filter_by(discord_id=str(discord_id))
+
+        users = query.all()
+        updated = 0
+
+        for user in users:
+            for message in user.messages:
+                message_ref = await get_message_attachment_url(guild, message.message_id)
+                if not message_ref:
+                    continue
+
+                message.image_url = message_ref
+                updated += 1
+
+                fetched_message = None
+                for channel in guild.channels:
+                    if not hasattr(channel, "fetch_message"):
+                        continue
+                    try:
+                        fetched_message = await channel.fetch_message(str(message.message_id))
+                        break
+                    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                        continue
+
+                if fetched_message is not None:
+                    if fetched_message.content:
+                        message.content = fetched_message.content
+                    if fetched_message.created_at:
+                        message.timestamp = fetched_message.created_at
+
+        db.commit()
+        return updated
+    finally:
+        db.close()
+
+
 async def update_user(discord_id: str, message_id: str, content: str, timestamp: datetime, username: str, display_name: str, avatar_url: str, messsage_guild: discord.Guild, attachments: list[discord.Attachment] = []):
     """
     updates the users total messages, and top 10 most dangerous messages list for that user
@@ -132,11 +202,13 @@ async def update_user(discord_id: str, message_id: str, content: str, timestamp:
         user.display_name = display_name
         user.avatar_url = avatar_url
 
+        image_url = get_image_url_from_attachments(attachments)
         scores, new_content, is_image = await classify_message_and_image(content, message_id, attachments)
             
         new_message = DangerMessage(
             message_id=str(message_id),
             content=new_content,
+            image_url=image_url,
             danger_score=scores["Danger"],
             sexual_score=scores["Sexual"],
             hate_score=scores["Hate"],

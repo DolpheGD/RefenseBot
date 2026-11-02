@@ -15,6 +15,12 @@ async def classify_with_output(content: str, message_id: str = "", attachments: 
 
     if is_image:
         desc += f'\n(Has image attachment)'
+        image_url = next(
+            (attachment.url for attachment in attachments if attachment.content_type and attachment.content_type.startswith("image/")),
+            ""
+        )
+        if image_url:
+            desc += f'\nImage URL: {image_url}'
 
     value = ""
     for category, score in results.items():
@@ -101,6 +107,8 @@ async def classify_user_with_output(user: discord.Member, verbose = False):
         value_text = ""
         if verbose:
             value_text += f'(Danger: {message.danger_score:.2%}) (Hate: {message.hate_score:.2%}) (Sexual: {message.sexual_score:.2%}) (Concern: {message.concern_score:.2%}) (Scam: {message.scam_score:.2%}) (ID: {message.message_id})\n'
+            if message.image_url:
+                value_text += f'(Image: {message.image_url})\n'
 
         embed.add_field(name=name_text, value=value_text, inline=False)
 

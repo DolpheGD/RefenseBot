@@ -79,6 +79,7 @@ class DangerMessage(Base):
 
     message_id: Mapped[str] = mapped_column(String, unique=True)
     content: Mapped[str] = mapped_column(String)
+    image_url: Mapped[str] = mapped_column(String, default="")
 
     danger_score: Mapped[float] = mapped_column(Float)
 

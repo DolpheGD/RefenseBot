@@ -3,7 +3,8 @@ import discord
 
 from discord.ext import commands
 from discord import app_commands
-from bot.services.get_users import get_highest_danger
+from bot.services.get_users import get_highest_danger, get_recent_classified_messages
+from bot.services.update_user import recalibrate_server_image_urls
 from bot.utils.guild_decorator import guild_decorator
 from bot.utils.views import AchievementGuideView, LeaderboardView
 
@@ -80,6 +81,65 @@ class UserUtils(commands.Cog):
             view=view
         )
 
+    @guild_decorator
+    @app_commands.command(
+        name="recalibrate",
+        description="Refresh stored image URLs for dangerous messages in this server"
+    )
+    @app_commands.describe(
+        user="Optional user to refresh; defaults to all users in the server"
+    )
+    @app_commands.default_permissions(administrator=True)
+    async def recalibrate(self, ctx: discord.Interaction, user: discord.User | None = None):
+        await ctx.response.defer(ephemeral=True)
+        updated = await recalibrate_server_image_urls(ctx.guild, user.id if user is not None else None)
+        if user is not None:
+            await ctx.followup.send(
+                f"Recalibrated `{updated}` stored image records for {user.mention}.",
+                ephemeral=True
+            )
+        else:
+            await ctx.followup.send(
+                f"Recalibrated `{updated}` stored image records across `{ctx.guild.name}`.",
+                ephemeral=True
+            )
+
+    @guild_decorator
+    @app_commands.command(
+        name="log",
+        description="Shows the most recent classified danger messages for this server"
+    )
+    @app_commands.describe(
+        limit="How many recent classified messages to show",
+        user="Optional user filter"
+    )
+    @app_commands.default_permissions(administrator=True)
+    async def log(self, ctx: discord.Interaction, limit: int = 10, user: discord.User | None = None):
+        limit = max(1, min(limit, 25))
+        recent_messages = await get_recent_classified_messages(ctx.guild, limit=limit, discord_id=user.id if user else None)
+
+        if not recent_messages:
+            await ctx.response.send_message("No classified messages found for this server.", ephemeral=True)
+            return
+
+        embed = discord.Embed(
+            title=f"Recent Classified Messages - {ctx.guild.name}",
+            color=discord.Color.orange(),
+        )
+
+        lines = []
+        for message in recent_messages:
+            user_profile = message.user
+            member_name = user_profile.display_name or user_profile.discord_id
+            content = message.content.strip() if message.content else "(image-only)"
+            if len(content) > 100:
+                content = content[:97] + "..."
+
+            image_note = f" | Image: {message.image_url}" if message.image_url else ""
+            lines.append(f"{member_name}: {content}{image_note}\n(ID: {message.message_id})")
+
+        embed.description = "\n\n".join(lines)
+        await ctx.response.send_message(embed=embed, ephemeral=True)
 
 
 async def setup(bot):

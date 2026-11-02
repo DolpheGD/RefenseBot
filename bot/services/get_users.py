@@ -4,7 +4,7 @@ import discord
 from sqlalchemy import select
 
 from bot.database.session import SessionLocal
-from bot.database.models.user_model import UserProfile
+from bot.database.models.user_model import DangerMessage, Guild, UserProfile
 from bot.services.update_user import get_or_create_guild, get_or_create_user
 
 logger = logging.getLogger("refensebot.users")
@@ -39,9 +39,13 @@ async def get_highest_danger(server_id: int):
     """
     db = SessionLocal()
     try:
+        guild = db.query(Guild).filter_by(discord_id=str(server_id)).first()
+        if guild is None:
+            return None
+
         users = (
             db.query(UserProfile)
-            .filter_by(guild_id=server_id)
+            .filter_by(guild_id=guild.id)
             .order_by(UserProfile.danger_score.desc())
             .where(UserProfile.is_banned == False)
             .all()
@@ -143,6 +147,25 @@ async def set_vote_allow(guild: discord.Guild, setting: bool):
     finally:
         db.close()
 
+
+
+async def get_recent_classified_messages(guild: discord.Guild, limit: int = 10, discord_id: int | None = None):
+    db = SessionLocal()
+    try:
+        guild_db = await get_or_create_guild(db, guild)
+        query = (
+            db.query(DangerMessage)
+            .join(UserProfile, DangerMessage.user_id == UserProfile.id)
+            .filter(UserProfile.guild_id == guild_db.id)
+            .order_by(DangerMessage.timestamp.desc())
+        )
+        if discord_id is not None:
+            query = query.filter(UserProfile.discord_id == str(discord_id))
+
+        messages = query.limit(limit).all()
+        return messages
+    finally:
+        db.close()
 
 
 async def set_user_banned(discord_id: int, guild: discord.Guild, banned):

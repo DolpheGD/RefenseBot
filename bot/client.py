@@ -15,6 +15,7 @@ from bot.utils.sync_bans import sync_bans
 from bot.utils.check_files import check_files
 from bot.utils.memory_guard import start_memory_watchdog
 from bot.services.topgg_service import setup_topgg
+from bot.database.db_init import init_db
 
 load_dotenv()
 
@@ -87,6 +88,7 @@ class MyClient(commands.Bot):
 
 def run_bot():
     configure_logging()
+    init_db()
     # check required files
     check_files()
     start_memory_watchdog()
