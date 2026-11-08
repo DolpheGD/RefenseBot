@@ -26,22 +26,20 @@ class Listeners(commands.Cog):
 
         content = str(message.clean_content)
         attachments = message.attachments
-        
-        if len(attachments) > 0:
-            # we only accept images. If there is no image, and no content, return
-            has_image = False
-            for attachment in attachments:
-                if attachment.content_type and attachment.content_type.startswith("image/"):
-                    has_image = True
-                    break
-            if not has_image:
-                return
-            
-        if len(content) <= 0 and len(attachments) <= 0:
+
+        image_attachments = [
+            attachment for attachment in attachments
+            if attachment.content_type and attachment.content_type.startswith("image/")
+        ]
+
+        if attachments and not image_attachments:
+            return
+
+        if not content.strip() and not image_attachments:
             logger.info('Message with no text or attachments detected. Skipping processing.')
             return
-        else:
-            logger.info('Message Processing "%s" with %s attachments.', content, len(attachments))
+
+        logger.info('Message Processing "%s" with %s attachments.', content, len(attachments))
         
             
         user_id = str(message.author.id)

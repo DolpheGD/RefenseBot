@@ -2,10 +2,13 @@ import discord
 from bot.ml.all_classifier import classify_message_and_image
 from bot.services.get_users import get_is_banned, get_top_ten_and_avg, get_total_messages, get_vote_count
 
-async def classify_with_output(content: str, message_id: str = "", attachments: list[discord.Attachment] = []):
+async def classify_with_output(content: str, message_id: str = "", attachments: list[discord.Attachment] | None = None):
     """
     classify_danger_level output, using discord embeds
     """
+    if attachments is None:
+        attachments = []
+
     results, new_content, is_image = await classify_message_and_image(content, message_id, attachments)
 
     if len(new_content) > 100:

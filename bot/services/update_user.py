@@ -185,11 +185,14 @@ async def recalibrate_server_image_urls(guild: discord.Guild, discord_id: str | 
         db.close()
 
 
-async def update_user(discord_id: str, message_id: str, content: str, timestamp: datetime, username: str, display_name: str, avatar_url: str, messsage_guild: discord.Guild, attachments: list[discord.Attachment] = []):
+async def update_user(discord_id: str, message_id: str, content: str, timestamp: datetime, username: str, display_name: str, avatar_url: str, messsage_guild: discord.Guild, attachments: list[discord.Attachment] | None = None):
     """
     updates the users total messages, and top 10 most dangerous messages list for that user
     also updates any other cache information about the user
     """
+    if attachments is None:
+        attachments = []
+
     db = SessionLocal()
 
     try:

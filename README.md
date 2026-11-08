@@ -56,6 +56,9 @@ Uses a lightweight moderation pipeline to classify message content:
 * KoalaAI moderation model
 * FalconsAI NSFW scoring
 * EasyOCR for image text extraction
+* Image analysis is serialized and size-limited (10 MB, 4 megapixels) to reduce
+  memory spikes on small hosts. Larger images are skipped, but accompanying text
+  is still analyzed.
 
 ---
 
