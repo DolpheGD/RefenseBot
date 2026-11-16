@@ -85,6 +85,7 @@ class GeminiCommandTests(unittest.TestCase):
         self.assertEqual([len(part) for part in parts], [1_900, 1])
 
     def test_generate_response_uses_configured_free_flash_model(self):
+        self.assertEqual(gemini.GEMINI_MODEL, "gemini-3.5-flash-lite")
         with (
             patch.object(gemini, "GEMINI_API_KEY", "test-api-key"),
             patch.object(gemini.aiohttp, "ClientSession", _FakeSession),

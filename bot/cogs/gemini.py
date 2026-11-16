@@ -11,7 +11,7 @@ from bot.config import GEMINI_API_KEY
 
 logger = logging.getLogger("refensebot.gemini")
 
-GEMINI_MODEL = "gemini-3.8-flash"
+GEMINI_MODEL = "gemini-3.5-flash-lite"
 GEMINI_API_URL = (
     "https://generativelanguage.googleapis.com/v1beta/"
     f"models/{GEMINI_MODEL}:generateContent"
