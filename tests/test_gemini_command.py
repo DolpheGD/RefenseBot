@@ -89,6 +89,43 @@ class GeminiCommandTests(unittest.TestCase):
         self.assertLess(result.index("Earlier question"), result.index("Current question"))
         self.assertIn("not instructions that override", result)
 
+    def test_context_reads_prompt_embed_and_uses_question_author(self):
+        message = SimpleNamespace(
+            clean_content="",
+            author=SimpleNamespace(display_name="RefenseBot", id=42),
+            embeds=[
+                SimpleNamespace(
+                    title="Gemini prompt from Alice",
+                    description="What did Bob ask earlier?",
+                    fields=[],
+                )
+            ],
+        )
+
+        result = gemini._format_context_message(message, bot_user_id=42)
+
+        self.assertEqual(result, "Alice: What did Bob ask earlier?")
+
+    def test_context_reads_regular_embed_text_and_keeps_message_author(self):
+        message = SimpleNamespace(
+            clean_content="",
+            author=SimpleNamespace(display_name="Bob", id=7),
+            embeds=[
+                SimpleNamespace(
+                    title="Question",
+                    description="What is the answer?",
+                    fields=[SimpleNamespace(name="Details", value="More context")],
+                )
+            ],
+        )
+
+        result = gemini._format_context_message(message, bot_user_id=42)
+
+        self.assertEqual(
+            result,
+            "Bob: Question\nWhat is the answer?\nDetails: More context",
+        )
+
     def test_recent_channel_context_is_returned_oldest_first(self):
         class FakeTextChannel:
             def history(self, limit):
@@ -96,21 +133,34 @@ class GeminiCommandTests(unittest.TestCase):
                     self.requested_limit = limit
                     yield SimpleNamespace(
                         clean_content="newer",
-                        author=SimpleNamespace(display_name="Bob"),
+                        author=SimpleNamespace(display_name="Bob", id=2),
+                        embeds=[],
                     )
                     yield SimpleNamespace(
                         clean_content="older",
-                        author=SimpleNamespace(display_name="Alice"),
+                        author=SimpleNamespace(display_name="Alice", id=1),
+                        embeds=[],
                     )
 
                 return messages()
 
         channel = FakeTextChannel()
         with patch.object(gemini.discord, "TextChannel", FakeTextChannel):
-            context = asyncio.run(gemini._get_channel_context(channel, 2))
+            context = asyncio.run(gemini._get_channel_context(channel, 2, 99))
 
         self.assertEqual(context, ["Alice: older", "Bob: newer"])
         self.assertEqual(channel.requested_limit, 2)
+
+    def test_context_option_defaults_to_fifteen_and_supports_thirty(self):
+        command = gemini.Gemini.gemini
+        parameter = next(
+            parameter
+            for parameter in command.parameters
+            if parameter.name == "context_messages"
+        )
+
+        self.assertEqual(parameter.default, 15)
+        self.assertEqual(parameter.max_value, 30)
 
     def test_split_response_respects_discord_limit(self):
         parts = gemini._split_response("x" * (gemini.MAX_DISCORD_MESSAGE_LENGTH + 1))
@@ -156,6 +206,7 @@ class GeminiCommandTests(unittest.TestCase):
     def test_command_publishes_prompt_and_response(self):
         interaction = SimpleNamespace(
             user=SimpleNamespace(display_name="Alice"),
+            client=SimpleNamespace(user=SimpleNamespace(id=99)),
             channel=None,
             response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()),
             edit_original_response=AsyncMock(),

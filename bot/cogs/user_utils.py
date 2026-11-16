@@ -30,7 +30,7 @@ class UserUtils(commands.Cog):
         "`/classify id <message_id>` - Classifies the message with the given ID.\n" \
         "`/classify user <user> <verbose [Optional]>` - Classifies the user with a danger rating and dangerous messages.\n" \
         "`/recent <limit>` - Lists the 10, 25, or 50 most recently classified messages in this server.\n" \
-        "`/gemini <prompt> [context_messages]` - Publicly prompts Gemini with recent channel context.\n" \
+        "`/gemini <prompt> [context_messages]` - Publicly prompts Gemini with recent messages and embeds.\n" \
         "`/leaderboard` - Displays the top 10 most dangerous users.\n" \
         "`/achievements` - Displays the list of possible achievements in RefenseBot.\n" \
         "`/vote link` - Displays the link to vote for bot.\n" \

@@ -94,11 +94,13 @@ Classify a user's danger level
 
 Prompt Google's free-tier Gemini Flash model. Create an API key in
 [Google AI Studio](https://aistudio.google.com/apikey) and set `GEMINI_API_KEY`.
-The prompt and response are posted publicly. By default, the five most recent
-text messages from the same channel are also sent to Gemini as context; use the
-`context_messages` option to choose 0-10. The bot needs Read Message History
-permission to include context. Prompts and context are sent to Google, and
-free-tier requests may be used to improve Google's products.
+The prompt and response are posted publicly. By default, the 15 most recent
+messages from the same channel are sent to Gemini as context; use the
+`context_messages` option to choose 0-30. Text from message embeds is included,
+and prompts posted by this command are attributed to the user who asked them.
+The bot needs Read Message History permission to include context. Prompts and
+context are sent to Google, and free-tier requests may be used to improve
+Google's products.
 
 ---
 

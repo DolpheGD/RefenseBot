@@ -18,9 +18,9 @@ GEMINI_API_URL = (
 )
 MAX_PROMPT_LENGTH = 4_000
 MAX_DISCORD_MESSAGE_LENGTH = 1_900
-MAX_CONTEXT_MESSAGE_LENGTH = 800
-DEFAULT_CONTEXT_MESSAGES = 5
-MAX_CONTEXT_MESSAGES = 10
+MAX_CONTEXT_MESSAGE_LENGTH = 2_000
+DEFAULT_CONTEXT_MESSAGES = 15
+MAX_CONTEXT_MESSAGES = 30
 
 
 class GeminiAPIError(Exception):
@@ -156,9 +156,48 @@ def _build_model_prompt(prompt: str, context_messages: list[str]) -> str:
     )
 
 
+def _format_context_message(
+    message: discord.Message,
+    bot_user_id: int | None,
+) -> str:
+    content = message.clean_content.strip()
+    speaker = message.author.display_name
+
+    for embed in message.embeds:
+        title = embed.title.strip() if embed.title else ""
+        description = embed.description.strip() if embed.description else ""
+        fields = [
+            f"{field.name}: {field.value}"
+            for field in embed.fields
+            if field.name or field.value
+        ]
+        embed_content = "\n".join(
+            part for part in (title, description, *fields) if part
+        ).strip()
+        if not embed_content:
+            continue
+
+        prompt_prefix = "Gemini prompt from "
+        if (
+            message.author.id == bot_user_id
+            and title.startswith(prompt_prefix)
+        ):
+            speaker = title[len(prompt_prefix) :].strip() or speaker
+            embed_content = description or "\n".join(fields).strip()
+        if embed_content:
+            content = f"{content}\n{embed_content}".strip() if content else embed_content
+
+    if not content:
+        return ""
+    if len(content) > MAX_CONTEXT_MESSAGE_LENGTH:
+        content = content[: MAX_CONTEXT_MESSAGE_LENGTH - 3] + "..."
+    return f"{speaker}: {content}"
+
+
 async def _get_channel_context(
     channel: discord.abc.GuildChannel | discord.Thread | None,
     limit: int,
+    bot_user_id: int | None,
 ) -> list[str]:
     if limit == 0:
         return []
@@ -184,12 +223,9 @@ async def _get_channel_context(
 
     context = []
     for message in reversed(messages):
-        content = message.clean_content.strip()
-        if not content:
-            continue
-        if len(content) > MAX_CONTEXT_MESSAGE_LENGTH:
-            content = content[: MAX_CONTEXT_MESSAGE_LENGTH - 3] + "..."
-        context.append(f"{message.author.display_name}: {content}")
+        formatted_message = _format_context_message(message, bot_user_id)
+        if formatted_message:
+            context.append(formatted_message)
     return context
 
 
@@ -217,7 +253,7 @@ class Gemini(commands.Cog):
     @app_commands.guild_only()
     @app_commands.describe(
         prompt="Your prompt for Gemini (up to 4000 characters)",
-        context_messages="Recent channel messages to include as context (0-10, default 5)",
+        context_messages="Recent channel messages to include as context (0-30, default 15)",
     )
     async def gemini(
         self,
@@ -250,6 +286,7 @@ class Gemini(commands.Cog):
             channel_context = await _get_channel_context(
                 interaction.channel,
                 context_messages,
+                interaction.client.user.id if interaction.client.user else None,
             )
         except GeminiAPIError as exc:
             await _send_public_error(interaction, exc.user_message)
