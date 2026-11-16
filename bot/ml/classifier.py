@@ -4,6 +4,7 @@
 # blocked until the failure is resolved unless a local model is available.
 
 import asyncio
+import logging
 import math
 from typing import Any, Dict
 
@@ -12,6 +13,8 @@ import requests
 from bot.config import HF_TOKEN, USE_LOCAL_ML
 from bot.helpers.scam_identifier import identify_scam
 from bot.helpers.slur_identifier import identify_slurs
+
+logger = logging.getLogger("refensebot.classifier")
 
 # Label mapping expected from the moderation model
 CLASS_TERMS = {
@@ -29,6 +32,7 @@ CLASS_TERMS = {
 # Globals for lazy-loaded local models
 _tokenizer = None
 _model = None
+_toxic_pipeline = None
 _torch = None
 _REMOTE_USAGE_BLOCKED = False
 _REMOTE_USAGE_BLOCK_REASON = ""
@@ -174,6 +178,63 @@ def _classify_general_remote(text: str) -> Dict[str, float]:
         return {k: 0.0 for k in CLASS_TERMS}
 
 
+def _extract_toxicity_score(data: Any) -> float:
+    if isinstance(data, dict):
+        items = [data]
+    elif isinstance(data, list):
+        items = [
+            item
+            for group in data
+            for item in (group if isinstance(group, list) else [group])
+            if isinstance(item, dict)
+        ]
+    else:
+        return 0.0
+
+    for item in items:
+        if str(item.get("label", "")).strip().lower() == "toxic":
+            try:
+                return float(item.get("score", 0.0))
+            except (TypeError, ValueError):
+                logger.warning("Toxic-BERT returned an invalid toxicity score.")
+                return 0.0
+    return 0.0
+
+
+def _classify_toxicity_local(message: str) -> float:
+    global _toxic_pipeline
+    if _toxic_pipeline is None:
+        from transformers import pipeline
+
+        _toxic_pipeline = pipeline(
+            "text-classification",
+            model="unitary/toxic-bert",
+            token=HF_TOKEN,
+        )
+
+    results = _toxic_pipeline(message, top_k=None)
+    return _extract_toxicity_score(results)
+
+
+def _classify_toxicity_remote(message: str) -> float:
+    if not HF_TOKEN:
+        return 0.0
+
+    url = "https://api-inference.huggingface.co/models/unitary/toxic-bert"
+    try:
+        response = requests.post(
+            url,
+            headers=HF_HEADERS,
+            json={"inputs": message},
+            timeout=15,
+        )
+        response.raise_for_status()
+        return _extract_toxicity_score(response.json())
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning("Toxic-BERT remote inference failed: %s", exc)
+        return 0.0
+
+
 async def classify_danger_level(message: str, image: bool = False) -> Dict[str, float]:
     """Compute danger-related scores for a message.
 
@@ -197,12 +258,19 @@ async def classify_danger_level(message: str, image: bool = False) -> Dict[str, 
             results = await asyncio.to_thread(_classify_general_remote, message)
         else:
             return {"Hate": 0.0, "Sexual": 0.0, "Concern": 0.0, "Danger": 0.0, "Scam": 0.0}
+        toxicity_score = await asyncio.to_thread(
+            _classify_toxicity_local if USE_LOCAL_ML else _classify_toxicity_remote,
+            message,
+        )
     elif local_ready and (remote_blocked or not HF_TOKEN):
         results = await asyncio.to_thread(_classify_general_local, message)
+        toxicity_score = await asyncio.to_thread(_classify_toxicity_local, message)
     elif HF_TOKEN and not remote_blocked:
         results = await asyncio.to_thread(_classify_general_remote, message)
+        toxicity_score = await asyncio.to_thread(_classify_toxicity_remote, message)
     elif local_ready:
         results = await asyncio.to_thread(_classify_general_local, message)
+        toxicity_score = await asyncio.to_thread(_classify_toxicity_local, message)
     else:
         return {"Hate": 0.0, "Sexual": 0.0, "Concern": 0.0, "Danger": 0.0, "Scam": 0.0}
 
@@ -220,6 +288,7 @@ async def classify_danger_level(message: str, image: bool = False) -> Dict[str, 
         + get_score("V") * 0.20
         + get_score("H2") * 0.35
         + get_score("V2") * 0.30
+        + toxicity_score * 0.3
         + slurs.get("count", 0) * 0.5,
         1.0,
     )
