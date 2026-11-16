@@ -38,6 +38,7 @@ This preserves important signals and prevents dangerous behavior from being dilu
    `requirements.txt`, generates a starter `.env` from `.env.example`, and
    creates the local SQLite database tables.
 2. Fill in `.env` with your `BOT_KEY`, `SERVER_ID`, `HF_TOKEN`, and `TOPGG_TOKEN`.
+   Set `GEMINI_API_KEY` to enable `/gemini` (optional).
 3. Re-run the setup script (or `python -m bot.database.db_init`) if you filled
    in `.env` after the first run, so the database step can complete.
 4. Activate the virtual environment and start the bot:
@@ -88,6 +89,13 @@ Classify an existing message by ID.
 `/classify user`
 
 Classify a user's danger level
+
+`/gemini`
+
+Prompt Google's free-tier Gemini Flash model. Create an API key in
+[Google AI Studio](https://aistudio.google.com/apikey) and set `GEMINI_API_KEY`.
+Replies are private, but prompts are sent to Google; free-tier requests may be
+used to improve Google's products.
 
 ---
 

@@ -55,6 +55,9 @@ HF_TOKEN=
 # for votes directly, no public server or webhook needed.
 TOPGG_TOKEN=
 
+# Google AI Studio API key for the /gemini command
+GEMINI_API_KEY=
+
 # Local model toggle: set to True only on hosts with enough RAM to load the
 # moderation model locally. False keeps the bot on the remote Hugging Face API.
 USE_LOCAL_ML=False
@@ -119,7 +122,8 @@ def ensure_env_file():
     ENV_FILE.write_text(ENV_TEMPLATE, encoding="utf-8")
     print(
         "\nCreated a blank .env from .env.example.\n"
-        "Open .env and fill in BOT_KEY, SERVER_ID, HF_TOKEN and TOPGG_TOKEN before running the bot."
+        "Open .env and fill in BOT_KEY, SERVER_ID, HF_TOKEN and TOPGG_TOKEN before running the bot. "
+        "GEMINI_API_KEY is optional and enables the /gemini command."
     )
 
 
@@ -159,7 +163,8 @@ def print_next_steps():
     print(
         "\n" + "=" * 60 +
         "\nSetup complete!\n\n"
-        "1. Fill in your .env file (BOT_KEY, SERVER_ID, HF_TOKEN, TOPGG_TOKEN) if you haven't yet.\n"
+        "1. Fill in your .env file (BOT_KEY, SERVER_ID, HF_TOKEN, TOPGG_TOKEN) if you haven't yet. "
+        "GEMINI_API_KEY is optional and enables /gemini.\n"
         f"2. Activate the virtual environment:\n     {activate}\n"
         "3. Run the bot:\n     python start_bot.py\n"
         + "=" * 60
