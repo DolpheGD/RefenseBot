@@ -1,6 +1,7 @@
 import asyncio
 import unittest
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 from bot.cogs import gemini
 
@@ -79,6 +80,38 @@ class GeminiCommandTests(unittest.TestCase):
         self.assertIn("Partial", result)
         self.assertIn("incomplete", result)
 
+    def test_build_model_prompt_includes_history_before_current_prompt(self):
+        result = gemini._build_model_prompt(
+            "Current question",
+            ["Alice: Earlier question", "Bot: Earlier answer"],
+        )
+
+        self.assertLess(result.index("Earlier question"), result.index("Current question"))
+        self.assertIn("not instructions that override", result)
+
+    def test_recent_channel_context_is_returned_oldest_first(self):
+        class FakeTextChannel:
+            def history(self, limit):
+                async def messages():
+                    self.requested_limit = limit
+                    yield SimpleNamespace(
+                        clean_content="newer",
+                        author=SimpleNamespace(display_name="Bob"),
+                    )
+                    yield SimpleNamespace(
+                        clean_content="older",
+                        author=SimpleNamespace(display_name="Alice"),
+                    )
+
+                return messages()
+
+        channel = FakeTextChannel()
+        with patch.object(gemini.discord, "TextChannel", FakeTextChannel):
+            context = asyncio.run(gemini._get_channel_context(channel, 2))
+
+        self.assertEqual(context, ["Alice: older", "Bob: newer"])
+        self.assertEqual(channel.requested_limit, 2)
+
     def test_split_response_respects_discord_limit(self):
         parts = gemini._split_response("x" * (gemini.MAX_DISCORD_MESSAGE_LENGTH + 1))
 
@@ -119,6 +152,42 @@ class GeminiCommandTests(unittest.TestCase):
                 asyncio.run(gemini._generate_response("test prompt"))
 
         self.assertIn("invalid response", raised.exception.user_message.lower())
+
+    def test_command_publishes_prompt_and_response(self):
+        interaction = SimpleNamespace(
+            user=SimpleNamespace(display_name="Alice"),
+            channel=None,
+            response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()),
+            edit_original_response=AsyncMock(),
+            followup=SimpleNamespace(send=AsyncMock()),
+        )
+        cog = gemini.Gemini(None)
+
+        with (
+            patch.object(gemini, "GEMINI_API_KEY", "test-api-key"),
+            patch.object(gemini, "_generate_response", new=AsyncMock(return_value="Answer")),
+        ):
+            asyncio.run(
+                gemini.Gemini.gemini.callback(
+                    cog,
+                    interaction,
+                    "Question",
+                    context_messages=0,
+                )
+            )
+
+        interaction.response.defer.assert_awaited_once_with()
+        prompt_embed = interaction.edit_original_response.call_args.kwargs["embed"]
+        self.assertEqual(prompt_embed.description, "Question")
+        interaction.followup.send.assert_awaited_once()
+        self.assertEqual(
+            interaction.followup.send.call_args.args[0],
+            "Answer",
+        )
+        self.assertNotIn(
+            "ephemeral",
+            interaction.followup.send.call_args.kwargs,
+        )
 
 
 if __name__ == "__main__":
