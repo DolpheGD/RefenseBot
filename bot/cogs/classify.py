@@ -29,7 +29,12 @@ class Classify(commands.GroupCog, name="classify"):
         text = "Text to classify"
     )
     async def classify_text(self, ctx: discord.Interaction, text: str):
-        await ctx.response.send_message(embed=await classify_with_output(text))
+        try:
+            await ctx.response.defer()
+            embed = await classify_with_output(text)
+            await ctx.followup.send(embed=embed)
+        except (discord.NotFound, discord.HTTPException) as exc:
+            logger.warning("Ignoring stale /classify text interaction: %s", exc)
     
 
 
@@ -81,7 +86,12 @@ class Classify(commands.GroupCog, name="classify"):
     async def classify_user(self, ctx: discord.Interaction, user: discord.User = None, verbose: bool = False):
         if user is None:
             user = ctx.user
-        await ctx.response.send_message(embed=await classify_user_with_output(user, verbose))
+        try:
+            await ctx.response.defer()
+            embed = await classify_user_with_output(user, verbose)
+            await ctx.followup.send(embed=embed)
+        except (discord.NotFound, discord.HTTPException) as exc:
+            logger.warning("Ignoring stale /classify user interaction: %s", exc)
 
     @app_commands.command(
         name = "status",
