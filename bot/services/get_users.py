@@ -2,6 +2,7 @@ import logging
 
 import discord
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
 from bot.database.session import SessionLocal
 from bot.database.models.user_model import DangerMessage, Guild, UserProfile
@@ -156,6 +157,7 @@ async def get_recent_classified_messages(guild: discord.Guild, limit: int = 10, 
         query = (
             db.query(DangerMessage)
             .join(UserProfile, DangerMessage.user_id == UserProfile.id)
+            .options(joinedload(DangerMessage.user))
             .filter(UserProfile.guild_id == guild_db.id)
             .order_by(DangerMessage.timestamp.desc())
         )
@@ -184,4 +186,3 @@ async def set_user_banned(discord_id: int, guild: discord.Guild, banned):
         
     finally:
         db.close()
-
