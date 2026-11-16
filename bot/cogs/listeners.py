@@ -1,5 +1,6 @@
 # listeners to update data
 
+import asyncio
 import logging
 
 import discord
@@ -55,10 +56,30 @@ class Listeners(commands.Cog):
             avatar_url = ""        
 
         try:
-            await update_user(user_id, message_id, content, message_time, username, display_name, avatar_url, messsage_guild, attachments)
+            await asyncio.wait_for(
+                update_user(
+                    user_id,
+                    message_id,
+                    content,
+                    message_time,
+                    username,
+                    display_name,
+                    avatar_url,
+                    messsage_guild,
+                    attachments,
+                ),
+                timeout=15.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Message processing timed out for message %s from %s; skipping to keep the bot responsive.",
+                message_id,
+                user_id,
+            )
+            return
         except Exception:
             logger.exception("Failed to process message %s from %s", message_id, user_id)
-            raise
+            return
         
         
     @guild_decorator

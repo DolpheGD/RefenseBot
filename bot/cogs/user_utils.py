@@ -1,4 +1,6 @@
 # functions for general user utilities, such as help commands, user info, etc.
+import logging
+
 import discord
 
 from discord.ext import commands
@@ -7,6 +9,8 @@ from bot.services.get_users import get_highest_danger, get_recent_classified_mes
 from bot.services.update_user import recalibrate_server_image_urls
 from bot.utils.guild_decorator import guild_decorator
 from bot.utils.views import AchievementGuideView, LeaderboardView
+
+logger = logging.getLogger("refensebot.user_utils")
 
 
 class UserUtils(commands.Cog):
@@ -91,18 +95,21 @@ class UserUtils(commands.Cog):
     )
     @app_commands.default_permissions(administrator=True)
     async def recalibrate(self, ctx: discord.Interaction, user: discord.User | None = None):
-        await ctx.response.defer(ephemeral=True)
-        updated = await recalibrate_server_image_urls(ctx.guild, user.id if user is not None else None)
-        if user is not None:
-            await ctx.followup.send(
-                f"Recalibrated `{updated}` stored image records for {user.mention}.",
-                ephemeral=True
-            )
-        else:
-            await ctx.followup.send(
-                f"Recalibrated `{updated}` stored image records across `{ctx.guild.name}`.",
-                ephemeral=True
-            )
+        try:
+            await ctx.response.defer(ephemeral=True)
+            updated = await recalibrate_server_image_urls(ctx.guild, user.id if user is not None else None)
+            if user is not None:
+                await ctx.followup.send(
+                    f"Recalibrated `{updated}` stored image records for {user.mention}.",
+                    ephemeral=True
+                )
+            else:
+                await ctx.followup.send(
+                    f"Recalibrated `{updated}` stored image records across `{ctx.guild.name}`.",
+                    ephemeral=True
+                )
+        except (discord.NotFound, discord.HTTPException) as exc:
+            logger.warning("Ignoring stale /recalibrate interaction: %s", exc)
 
     @guild_decorator
     @app_commands.command(

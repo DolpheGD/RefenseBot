@@ -12,7 +12,8 @@ logger = logging.getLogger("refensebot.image_classifier")
 
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_IMAGE_PIXELS = 4_000_000
-
+OCR_TIMEOUT_SECONDS = 8.0
+NSFW_TIMEOUT_SECONDS = 8.0
 _IMAGE_CLASSIFIER = None
 _OCR_READER = None
 _IMAGE_CLASSIFICATION_LOCK = asyncio.Lock()
@@ -59,9 +60,15 @@ async def classify_image_NSFW(image):
         return {"nsfw": 0.0}
 
     try:
-        results = await asyncio.to_thread(model, image)
-    except Exception:
-        logger.exception("NSFW image classification failed")
+        results = await asyncio.wait_for(
+            asyncio.to_thread(model, image),
+            timeout=NSFW_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("NSFW image classification timed out; skipping it to keep the bot responsive.")
+        return {"nsfw": 0.0}
+    except Exception as exc:
+        logger.warning("NSFW image classification failed: %s", exc)
         return {"nsfw": 0.0}
 
     normalized = {"nsfw": 0.0}
@@ -81,14 +88,20 @@ async def classify_OCR(image):
 
     try:
         image_np = np.array(image)
-        results = await asyncio.to_thread(
-            reader.readtext,
-            image_np,
-            canvas_size=1600,
-            batch_size=1,
+        results = await asyncio.wait_for(
+            asyncio.to_thread(
+                reader.readtext,
+                image_np,
+                canvas_size=1600,
+                batch_size=1,
+            ),
+            timeout=OCR_TIMEOUT_SECONDS,
         )
-    except Exception:
-        logger.exception("OCR failed while reading an image")
+    except asyncio.TimeoutError:
+        logger.warning("OCR timed out while reading an image; skipping OCR for this message.")
+        return _empty_scores()
+    except Exception as exc:
+        logger.warning("OCR failed while reading an image: %s", exc)
         return _empty_scores()
 
     text = ""
@@ -135,9 +148,19 @@ async def classify_image(attachment):
                     MAX_IMAGE_BYTES,
                 )
                 return _empty_scores()
-            image = await asyncio.to_thread(_open_bounded_image, image_bytes)
-        except Exception:
-            logger.exception("Could not decode image attachment")
+            image = await asyncio.wait_for(
+                asyncio.to_thread(_open_bounded_image, image_bytes),
+                timeout=5.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Image decoding timed out; skipping attachment.")
+            return _empty_scores()
+        except Exception as exc:
+            logger.warning(
+                "Could not decode image attachment %s: %s",
+                getattr(attachment, "filename", "<unknown>"),
+                exc,
+            )
             return _empty_scores()
 
         if image is None:
