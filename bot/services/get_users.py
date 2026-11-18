@@ -12,8 +12,7 @@ logger = logging.getLogger("refensebot.users")
 
 async def get_top_ten_and_avg(discord_id: int, guild: discord.Guild):
     """
-    returns top ten danger and avg danger of a user within a server
-    top ten danger is a list of message objects (I think)
+    returns the stored danger messages and tier-weighted danger score for a user
     """
     db = SessionLocal()
     try:

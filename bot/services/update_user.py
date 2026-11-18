@@ -6,6 +6,13 @@ from bot.database.models.user_model import DangerMessage, Guild, UserProfile
 from bot.ml.all_classifier import classify_message_and_image
 
 
+MAX_STORED_MESSAGES = 100
+TOP_10_WEIGHT = 10.0
+TOP_25_WEIGHT = 5.0
+TOP_50_WEIGHT = 2.0
+REMAINING_WEIGHT = 0.1
+
+
 async def get_or_create_user(db, discord_id: str, message_guild: discord.Guild):
     """
     gets or creates a user profile for the given discord_id and guild
@@ -187,7 +194,7 @@ async def recalibrate_server_image_urls(guild: discord.Guild, discord_id: str | 
 
 async def update_user(discord_id: str, message_id: str, content: str, timestamp: datetime, username: str, display_name: str, avatar_url: str, messsage_guild: discord.Guild, attachments: list[discord.Attachment] | None = None):
     """
-    updates the users total messages, and top 10 most dangerous messages list for that user
+    updates the user's total messages and top 100 danger-message history
     also updates any other cache information about the user
     """
     if attachments is None:
@@ -235,9 +242,10 @@ async def update_user(discord_id: str, message_id: str, content: str, timestamp:
                 return
         
         
-        # if new top, then update the message list
+        # Keep the 100 most dangerous messages so the profile score can use
+        # the top 10/25/50 tiers without allowing the stored history to grow forever.
         changed = False
-        if len(top_messages) < 10:
+        if len(top_messages) < MAX_STORED_MESSAGES:
             user.messages.append(new_message)
             changed = True
         else:
@@ -247,7 +255,7 @@ async def update_user(discord_id: str, message_id: str, content: str, timestamp:
                 user.messages.append(new_message)
                 changed = True
 
-        # update the new top 10
+        # Update the tier-weighted danger score.
         if changed:
             await update_topten(user)
             
@@ -258,16 +266,33 @@ async def update_user(discord_id: str, message_id: str, content: str, timestamp:
 
 
 
+def _tier_weight(rank: int) -> float:
+    """Return the tier weight for a zero-based danger-message rank."""
+    if rank < 10:
+        return TOP_10_WEIGHT
+    if rank < 25:
+        return TOP_25_WEIGHT
+    if rank < 50:
+        return TOP_50_WEIGHT
+    return REMAINING_WEIGHT
+
+
 async def update_topten(user):
     updated_top = sorted(
         user.messages,
         key=lambda x: x.danger_score,
         reverse=True
-    )
-    if len(updated_top) <= 0:
+    )[:MAX_STORED_MESSAGES]
+
+    if not updated_top:
         user.danger_score = 0
     else:
-        user.danger_score = (
-            sum(msg.danger_score for msg in updated_top)
-            / len(updated_top)
+        weighted_scores = sum(
+            message.danger_score * _tier_weight(rank)
+            for rank, message in enumerate(updated_top)
         )
+        total_weight = sum(
+            _tier_weight(rank)
+            for rank in range(len(updated_top))
+        )
+        user.danger_score = weighted_scores / total_weight

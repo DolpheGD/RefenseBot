@@ -28,7 +28,7 @@ class UserUtils(commands.Cog):
         output = "Here are the available commands:\n" \
         "`/classify text <text>` - Classifies the provided text.\n" \
         "`/classify id <message_id>` - Classifies the message with the given ID.\n" \
-        "`/classify user <user> <verbose [Optional]>` - Classifies the user with a danger rating and dangerous messages.\n" \
+        "`/classify user <user> <verbose> <messages>` - Classifies a user and shows 1-100 dangerous messages (10 per page).\n" \
         "`/recent <limit>` - Lists the 10, 25, or 50 most recently classified messages in this server.\n" \
         "`/gemini <prompt> [context_messages]` - Prompts Gemini; reply to its prompt or answer to continue.\n" \
         "`/leaderboard` - Displays the top 10 most dangerous users.\n" \

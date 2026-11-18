@@ -43,9 +43,53 @@ async def classify_with_output(content: str, message_id: str = "", attachments: 
 
 
 
-async def classify_user_with_output(user: discord.Member, verbose = False):
+class UserClassificationView(discord.ui.View):
+    def __init__(self, embeds: list[discord.Embed], author_id: int):
+        super().__init__(timeout=300)
+        self.embeds = embeds
+        self.author_id = author_id
+        self.current_page = 0
+        self.update_buttons()
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message(
+                "Only the command user can use these buttons.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    @discord.ui.button(label="⬅️", style=discord.ButtonStyle.secondary)
+    async def previous(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page -= 1
+        self.update_buttons()
+        await interaction.response.edit_message(
+            embed=self.embeds[self.current_page],
+            view=self,
+        )
+
+    @discord.ui.button(label="➡️", style=discord.ButtonStyle.secondary)
+    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page += 1
+        self.update_buttons()
+        await interaction.response.edit_message(
+            embed=self.embeds[self.current_page],
+            view=self,
+        )
+
+    def update_buttons(self):
+        self.previous.disabled = self.current_page == 0
+        self.next.disabled = self.current_page == len(self.embeds) - 1
+
+
+async def classify_user_with_output(
+    user: discord.Member,
+    verbose: bool = False,
+    message_limit: int = 10,
+) -> tuple[discord.Embed, UserClassificationView | None]:
     """
-    returns a discord embed of the top 10 most dangerous messages for the user, and their average danger score
+    returns a Discord embed of the top 10 dangerous messages and the user's tier-weighted danger score
     """
     top_ten, avg_danger = await get_top_ten_and_avg(user.id, user.guild)
     total_messages = await get_total_messages(user.id, user.guild)
@@ -83,39 +127,59 @@ async def classify_user_with_output(user: discord.Member, verbose = False):
 
 
 
-    embed = discord.Embed(
-       title=f"**⚠️ {user.display_name}'s Danger ⚠️**",
-       color=color,
-       description=desc
-    )
-    
-    if user.avatar:
-        embed.set_thumbnail(url=user.avatar.url)
-    
+    requested_messages = top_ten[:message_limit]
+    pages = [
+        requested_messages[start : start + 10]
+        for start in range(0, len(requested_messages), 10)
+    ] or [[]]
+    embeds = []
 
-    if len(top_ten) <= 0:
-        embed.add_field(name='*[No Data]*', value="", inline=False)
-        return embed
-    
+    for page_number, page_messages in enumerate(pages, start=1):
+        embed = discord.Embed(
+            title=f"**⚠️ {user.display_name}'s Danger ⚠️**",
+            color=color,
+            description=desc,
+        )
 
-    for num, message in enumerate(top_ten, start=1):
-        name_text = f'{num}. '
-        if len(message.content) >= 50:
-            name_text += f'{message.content[:50]} (...)'
-            if verbose:
-                name_text += f' ({len(message.content) - 50} more)'
+        if user.avatar:
+            embed.set_thumbnail(url=user.avatar.url)
+
+        if not requested_messages:
+            embed.add_field(name="*[No Data]*", value="", inline=False)
         else:
-            name_text += message.content
+            for num, message in enumerate(
+                page_messages,
+                start=(page_number - 1) * 10 + 1,
+            ):
+                name_text = f"{num}. "
+                if len(message.content) >= 50:
+                    name_text += f"{message.content[:50]} (...)"
+                    if verbose:
+                        name_text += f" ({len(message.content) - 50} more)"
+                else:
+                    name_text += message.content
 
-        value_text = ""
-        if verbose:
-            value_text += f'(Danger: {message.danger_score:.2%}) (Hate: {message.hate_score:.2%}) (Sexual: {message.sexual_score:.2%}) (Concern: {message.concern_score:.2%}) (Scam: {message.scam_score:.2%}) (ID: {message.message_id})\n'
-            if message.image_url:
-                value_text += f'(Image: {message.image_url})\n'
+                value_text = ""
+                if verbose:
+                    value_text += (
+                        f"(Danger: {message.danger_score:.2%}) "
+                        f"(Hate: {message.hate_score:.2%}) "
+                        f"(Sexual: {message.sexual_score:.2%}) "
+                        f"(Concern: {message.concern_score:.2%}) "
+                        f"(Scam: {message.scam_score:.2%}) "
+                        f"(ID: {message.message_id})\n"
+                    )
+                    if message.image_url:
+                        value_text += f"(Image: {message.image_url})\n"
 
-        embed.add_field(name=name_text, value=value_text, inline=False)
+                embed.add_field(name=name_text, value=value_text, inline=False)
 
-    return embed
+        if len(pages) > 1:
+            embed.set_footer(text=f"Page {page_number}/{len(pages)}")
+        embeds.append(embed)
+
+    view = UserClassificationView(embeds, user.id) if len(embeds) > 1 else None
+    return embeds[0], view
 
 
 def get_danger_color(danger):

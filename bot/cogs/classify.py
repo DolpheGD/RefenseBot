@@ -81,15 +81,22 @@ class Classify(commands.GroupCog, name="classify"):
     )
     @app_commands.describe(
         user = "The user to classify (default is yourself)",
-        verbose = "Show detailed message information"
+        verbose = "Show detailed message information",
+        messages = "Number of dangerous messages to show (1-100)"
     )
-    async def classify_user(self, ctx: discord.Interaction, user: discord.User = None, verbose: bool = False):
+    async def classify_user(
+        self,
+        ctx: discord.Interaction,
+        user: discord.User = None,
+        verbose: bool = False,
+        messages: app_commands.Range[int, 1, 100] = 10,
+    ):
         if user is None:
             user = ctx.user
         try:
             await ctx.response.defer()
-            embed = await classify_user_with_output(user, verbose)
-            await ctx.followup.send(embed=embed)
+            embed, view = await classify_user_with_output(user, verbose, messages)
+            await ctx.followup.send(embed=embed, view=view)
         except (discord.NotFound, discord.HTTPException) as exc:
             logger.warning("Ignoring stale /classify user interaction: %s", exc)
 
