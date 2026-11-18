@@ -132,11 +132,13 @@ class GeminiCommandTests(unittest.TestCase):
                 async def messages():
                     self.requested_limit = limit
                     yield SimpleNamespace(
+                        id=2,
                         clean_content="newer",
                         author=SimpleNamespace(display_name="Bob", id=2),
                         embeds=[],
                     )
                     yield SimpleNamespace(
+                        id=1,
                         clean_content="older",
                         author=SimpleNamespace(display_name="Alice", id=1),
                         embeds=[],
@@ -151,6 +153,35 @@ class GeminiCommandTests(unittest.TestCase):
         self.assertEqual(context, ["Alice: older", "Bob: newer"])
         self.assertEqual(channel.requested_limit, 2)
 
+    def test_context_skips_triggering_message_and_reads_default_history(self):
+        class FakeTextChannel:
+            def history(self, limit):
+                async def messages():
+                    self.requested_limit = limit
+                    for message_id in (3, 2, 1):
+                        yield SimpleNamespace(
+                            id=message_id,
+                            clean_content=f"message {message_id}",
+                            author=SimpleNamespace(display_name="User", id=message_id),
+                            embeds=[],
+                        )
+
+                return messages()
+
+        channel = FakeTextChannel()
+        with patch.object(gemini.discord, "TextChannel", FakeTextChannel):
+            context = asyncio.run(
+                gemini._get_channel_context(
+                    channel,
+                    gemini.DEFAULT_CONTEXT_MESSAGES,
+                    99,
+                    exclude_message_id=3,
+                )
+            )
+
+        self.assertEqual(channel.requested_limit, gemini.DEFAULT_CONTEXT_MESSAGES + 1)
+        self.assertEqual(context, ["User: message 1", "User: message 2"])
+
     def test_context_option_defaults_to_fifteen_and_supports_thirty(self):
         command = gemini.Gemini.gemini
         parameter = next(
@@ -161,6 +192,24 @@ class GeminiCommandTests(unittest.TestCase):
 
         self.assertEqual(parameter.default, 15)
         self.assertEqual(parameter.max_value, 30)
+
+    def test_only_bot_gemini_prompt_and_response_embeds_are_reply_targets(self):
+        prompt = SimpleNamespace(
+            author=SimpleNamespace(id=42),
+            embeds=[SimpleNamespace(title="Gemini prompt from Alice")],
+        )
+        response = SimpleNamespace(
+            author=SimpleNamespace(id=42),
+            embeds=[SimpleNamespace(title="Gemini response (part 2)")],
+        )
+        other_bot_message = SimpleNamespace(
+            author=SimpleNamespace(id=43),
+            embeds=[SimpleNamespace(title="Gemini response")],
+        )
+
+        self.assertTrue(gemini._is_gemini_message(prompt, 42))
+        self.assertTrue(gemini._is_gemini_message(response, 42))
+        self.assertFalse(gemini._is_gemini_message(other_bot_message, 42))
 
     def test_split_response_respects_discord_limit(self):
         parts = gemini._split_response("x" * (gemini.MAX_DISCORD_MESSAGE_LENGTH + 1))
@@ -232,12 +281,86 @@ class GeminiCommandTests(unittest.TestCase):
         self.assertEqual(prompt_embed.description, "Question")
         interaction.followup.send.assert_awaited_once()
         self.assertEqual(
-            interaction.followup.send.call_args.args[0],
+            interaction.followup.send.call_args.kwargs["embed"].description,
             "Answer",
         )
         self.assertNotIn(
             "ephemeral",
             interaction.followup.send.call_args.kwargs,
+        )
+
+    def test_reply_to_gemini_message_uses_default_context_and_replies(self):
+        class FakeTextChannel:
+            def __init__(self):
+                self.sent = AsyncMock()
+
+            def history(self, limit):
+                async def messages():
+                    self.requested_limit = limit
+                    yield SimpleNamespace(
+                        id=2,
+                        clean_content="older context",
+                        author=SimpleNamespace(display_name="Bob", id=2),
+                        embeds=[],
+                    )
+                    yield SimpleNamespace(
+                        id=1,
+                        clean_content="reply prompt",
+                        author=SimpleNamespace(display_name="Alice", id=1),
+                        embeds=[],
+                    )
+
+                return messages()
+
+            def typing(self):
+                class Typing:
+                    async def __aenter__(self):
+                        return None
+
+                    async def __aexit__(self, *_args):
+                        return None
+
+                return Typing()
+
+            async def send(self, *args, **kwargs):
+                await self.sent(*args, **kwargs)
+
+        channel = FakeTextChannel()
+        message = SimpleNamespace(
+            id=1,
+            clean_content="reply prompt",
+            author=SimpleNamespace(display_name="Alice", id=1, bot=False),
+            guild=SimpleNamespace(id=7),
+            channel=channel,
+            reference=SimpleNamespace(
+                resolved=SimpleNamespace(
+                    author=SimpleNamespace(id=42),
+                    embeds=[SimpleNamespace(title="Gemini response")],
+                ),
+                message_id=9,
+            ),
+            reply=AsyncMock(),
+        )
+        cog = gemini.Gemini(SimpleNamespace(user=SimpleNamespace(id=42)))
+        generate = AsyncMock(return_value="Reply answer")
+
+        with (
+            patch.object(gemini.discord, "TextChannel", FakeTextChannel),
+            patch.object(gemini, "GEMINI_API_KEY", "test-api-key"),
+            patch.object(gemini, "_generate_response", new=generate),
+        ):
+            asyncio.run(gemini.Gemini.on_message(cog, message))
+
+        self.assertEqual(
+            channel.requested_limit,
+            gemini.DEFAULT_CONTEXT_MESSAGES + 1,
+        )
+        self.assertIn("Bob: older context", generate.call_args.args[0])
+        self.assertIn("Alice: reply prompt", generate.call_args.args[0])
+        message.reply.assert_awaited_once()
+        self.assertEqual(
+            message.reply.call_args.kwargs["embed"].description,
+            "Reply answer",
         )
 
 

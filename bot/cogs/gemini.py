@@ -12,6 +12,8 @@ from bot.config import GEMINI_API_KEY
 logger = logging.getLogger("refensebot.gemini")
 
 GEMINI_MODEL = "gemini-3.5-flash-lite"
+GEMINI_PROMPT_TITLE_PREFIX = "Gemini prompt from "
+GEMINI_RESPONSE_TITLE = "Gemini response"
 GEMINI_API_URL = (
     "https://generativelanguage.googleapis.com/v1beta/"
     f"models/{GEMINI_MODEL}:generateContent"
@@ -177,12 +179,15 @@ def _format_context_message(
         if not embed_content:
             continue
 
-        prompt_prefix = "Gemini prompt from "
+        prompt_prefix = GEMINI_PROMPT_TITLE_PREFIX
         if (
             message.author.id == bot_user_id
             and title.startswith(prompt_prefix)
         ):
             speaker = title[len(prompt_prefix) :].strip() or speaker
+            embed_content = description or "\n".join(fields).strip()
+        elif message.author.id == bot_user_id and title.startswith(GEMINI_RESPONSE_TITLE):
+            speaker = "Gemini"
             embed_content = description or "\n".join(fields).strip()
         if embed_content:
             content = f"{content}\n{embed_content}".strip() if content else embed_content
@@ -198,6 +203,7 @@ async def _get_channel_context(
     channel: discord.abc.GuildChannel | discord.Thread | None,
     limit: int,
     bot_user_id: int | None,
+    exclude_message_id: int | None = None,
 ) -> list[str]:
     if limit == 0:
         return []
@@ -208,7 +214,12 @@ async def _get_channel_context(
         )
 
     try:
-        messages = [message async for message in channel.history(limit=limit)]
+        history_limit = limit + 1 if exclude_message_id is not None else limit
+        messages = [
+            message
+            async for message in channel.history(limit=history_limit)
+            if message.id != exclude_message_id
+        ][:limit]
     except discord.Forbidden as exc:
         raise GeminiAPIError(
             "The bot is missing permission to read channel history.",
@@ -240,6 +251,44 @@ async def _send_public_error(
         )
     except discord.HTTPException as exc:
         logger.warning("Could not deliver Gemini error message to Discord: %s", exc)
+
+
+def _is_gemini_message(message: Any, bot_user_id: int) -> bool:
+    if getattr(getattr(message, "author", None), "id", None) != bot_user_id:
+        return False
+
+    return any(
+        (embed.title or "").startswith(GEMINI_PROMPT_TITLE_PREFIX)
+        or (embed.title or "").startswith(GEMINI_RESPONSE_TITLE)
+        for embed in getattr(message, "embeds", [])
+    )
+
+
+def _make_response_embed(text: str, part_number: int) -> discord.Embed:
+    title = GEMINI_RESPONSE_TITLE
+    if part_number > 1:
+        title += f" (part {part_number})"
+    return discord.Embed(
+        title=title,
+        description=text,
+        color=discord.Color.green(),
+    )
+
+
+async def _send_reply_response(message: discord.Message, response: str) -> None:
+    for part_number, part in enumerate(_split_response(response), start=1):
+        embed = _make_response_embed(part, part_number)
+        if part_number == 1:
+            await message.reply(
+                embed=embed,
+                mention_author=False,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+        else:
+            await message.channel.send(
+                embed=embed,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
 
 
 class Gemini(commands.Cog):
@@ -316,7 +365,7 @@ class Gemini(commands.Cog):
         except GeminiAPIError as exc:
             await _send_public_error(interaction, exc.user_message)
             return
-        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+        except (aiohttp.ClientError, asyncio.TimeoutError, discord.HTTPException) as exc:
             logger.warning("Gemini request failed: %s", exc)
             await _send_public_error(
                 interaction,
@@ -325,13 +374,103 @@ class Gemini(commands.Cog):
             return
 
         try:
-            for part in _split_response(result):
+            for part_number, part in enumerate(_split_response(result), start=1):
                 await interaction.followup.send(
-                    part,
+                    embed=_make_response_embed(part, part_number),
                     allowed_mentions=discord.AllowedMentions.none(),
                 )
         except discord.HTTPException as exc:
             logger.warning("Could not deliver Gemini's response to Discord: %s", exc)
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        bot_user = self.bot.user
+        if (
+            message.author.bot
+            or message.guild is None
+            or bot_user is None
+            or message.reference is None
+        ):
+            return
+
+        referenced = message.reference.resolved
+        if referenced is None:
+            if message.reference.message_id is None:
+                return
+            try:
+                referenced = await message.channel.fetch_message(
+                    message.reference.message_id
+                )
+            except discord.NotFound:
+                return
+            except (discord.Forbidden, discord.HTTPException) as exc:
+                logger.warning("Could not inspect replied-to message for Gemini: %s", exc)
+                return
+
+        if not _is_gemini_message(referenced, bot_user.id):
+            return
+
+        prompt = message.clean_content.strip()
+        if not prompt:
+            await _send_message_error(message, "Please include a text prompt in your reply.")
+            return
+        if len(prompt) > MAX_PROMPT_LENGTH:
+            await _send_message_error(
+                message,
+                f"Prompts must be {MAX_PROMPT_LENGTH:,} characters or fewer.",
+            )
+            return
+        if not GEMINI_API_KEY:
+            await _send_message_error(
+                message,
+                "Gemini is not configured. Set GEMINI_API_KEY in the bot environment.",
+            )
+            return
+
+        try:
+            context_messages = await _get_channel_context(
+                message.channel,
+                DEFAULT_CONTEXT_MESSAGES,
+                bot_user.id,
+                exclude_message_id=message.id,
+            )
+        except GeminiAPIError as exc:
+            await _send_message_error(message, exc.user_message)
+            return
+
+        model_prompt = _build_model_prompt(
+            f"{message.author.display_name}: {prompt}",
+            context_messages,
+        )
+        try:
+            async with message.channel.typing():
+                response = await _generate_response(model_prompt)
+        except GeminiAPIError as exc:
+            await _send_message_error(message, exc.user_message)
+            return
+        except (aiohttp.ClientError, asyncio.TimeoutError, discord.HTTPException) as exc:
+            logger.warning("Gemini reply request failed: %s", exc)
+            await _send_message_error(
+                message,
+                "Could not connect to Gemini. Please try again later.",
+            )
+            return
+
+        try:
+            await _send_reply_response(message, response)
+        except discord.HTTPException as exc:
+            logger.warning("Could not deliver Gemini reply to Discord: %s", exc)
+
+
+async def _send_message_error(message: discord.Message, error: str) -> None:
+    try:
+        await message.reply(
+            error,
+            mention_author=False,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+    except discord.HTTPException as exc:
+        logger.warning("Could not deliver Gemini reply error to Discord: %s", exc)
 
 
 async def setup(bot: commands.Bot):

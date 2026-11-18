@@ -36,7 +36,8 @@ This preserves important signals and prevents dangerous behavior from being dilu
 
    This creates a `.venv` virtual environment, installs everything in
    `requirements.txt`, generates a starter `.env` from `.env.example`, and
-   creates the local SQLite database tables.
+   creates/verifies the local SQLite database tables. Setup also saves a
+   timestamped SQLite backup in `DB_Backups`.
 2. Fill in `.env` with your `BOT_KEY`, `SERVER_ID`, `HF_TOKEN`, and `TOPGG_TOKEN`.
    Set `GEMINI_API_KEY` to enable `/gemini` (optional).
 3. Re-run the setup script (or `python -m bot.database.db_init`) if you filled
@@ -98,9 +99,10 @@ The prompt and response are posted publicly. By default, the 15 most recent
 messages from the same channel are sent to Gemini as context; use the
 `context_messages` option to choose 0-30. Text from message embeds is included,
 and prompts posted by this command are attributed to the user who asked them.
-The bot needs Read Message History permission to include context. Prompts and
-context are sent to Google, and free-tier requests may be used to improve
-Google's products.
+Reply directly to a Gemini prompt or response message to continue the exchange;
+the bot will answer using the default 15-message context. The bot needs Read
+Message History permission to include context. Prompts and context are sent to
+Google, and free-tier requests may be used to improve Google's products.
 
 ---
 

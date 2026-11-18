@@ -7,7 +7,8 @@ What this does:
   2. Upgrades pip/setuptools/wheel inside that venv
   3. Installs everything listed in requirements.txt
   4. Creates a starter .env (from .env.example) if you don't have one yet
-  5. Creates the SQLite database tables (safe to re-run - it's idempotent)
+  5. Creates a SQLite backup in DB_Backups
+  6. Creates/verifies the SQLite database tables (safe to re-run - it's idempotent)
 
 Usage:
     python setup_bot.py
@@ -22,9 +23,11 @@ every step skips or no-ops safely if it's already done.
 """
 
 import platform
+import sqlite3
 import subprocess
 import sys
 import venv
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -32,8 +35,8 @@ VENV_DIR = ROOT / ".venv"
 REQUIREMENTS = ROOT / "requirements.txt"
 ENV_FILE = ROOT / ".env"
 ENV_EXAMPLE = ROOT / ".env.example"
-
-REQUIRED_ENV_KEYS = ("BOT_KEY", "SERVER_ID")
+DATABASE_FILE = ROOT / "cascadebot.db"
+DATABASE_BACKUP_DIR = ROOT / "DB_Backups"
 
 ENV_TEMPLATE = """\
 # Discord bot token (Discord Developer Portal -> your application -> Bot -> Token)
@@ -127,35 +130,45 @@ def ensure_env_file():
     )
 
 
-def env_is_configured() -> bool:
-    """Best-effort check that the required keys are actually filled in."""
-    if not ENV_FILE.exists():
-        return False
+def backup_database(
+    database_file: Path = DATABASE_FILE,
+    backup_dir: Path = DATABASE_BACKUP_DIR,
+) -> Path | None:
+    """Create a consistent SQLite snapshot without overwriting earlier backups."""
+    if not database_file.exists():
+        return None
 
-    values = {}
-    for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        values[key.strip()] = value.strip()
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    backup_file = backup_dir / f"cascadebot_{timestamp}.db"
 
-    return all(values.get(key) for key in REQUIRED_ENV_KEYS)
+    source = sqlite3.connect(str(database_file))
+    try:
+        destination = sqlite3.connect(str(backup_file))
+        try:
+            source.backup(destination)
+        finally:
+            destination.close()
+    except sqlite3.Error:
+        backup_file.unlink(missing_ok=True)
+        raise
+    finally:
+        source.close()
+
+    print(f"Database backup created: {backup_file}")
+    return backup_file
 
 
 def init_database():
-    if not env_is_configured():
-        print(
-            "\nSkipping database setup: BOT_KEY/SERVER_ID aren't filled in yet.\n"
-            "Fill in .env, then re-run this script (or run: python -m bot.database.db_init)."
-        )
-        return
-
+    backup_file = backup_database(DATABASE_FILE, DATABASE_BACKUP_DIR)
     py = venv_python()
     print("\nCreating/verifying database tables ...")
     result = subprocess.run([str(py), "-m", "bot.database.db_init"], cwd=str(ROOT))
     if result.returncode != 0:
         print("Database initialization failed - check the error above and re-run this script once fixed.")
+        raise SystemExit(result.returncode)
+    if backup_file is None:
+        backup_database(DATABASE_FILE, DATABASE_BACKUP_DIR)
 
 
 def print_next_steps():
