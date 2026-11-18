@@ -96,7 +96,10 @@ class Classify(commands.GroupCog, name="classify"):
         try:
             await ctx.response.defer()
             embed, view = await classify_user_with_output(user, verbose, messages)
-            await ctx.followup.send(embed=embed, view=view)
+            if view is None:
+                await ctx.followup.send(embed=embed)
+            else:
+                await ctx.followup.send(embed=embed, view=view)
         except (discord.NotFound, discord.HTTPException) as exc:
             logger.warning("Ignoring stale /classify user interaction: %s", exc)
 
